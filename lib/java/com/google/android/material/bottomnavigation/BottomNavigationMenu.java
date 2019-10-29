@@ -28,7 +28,7 @@ import android.view.SubMenu;
 /** @hide */
 @RestrictTo(LIBRARY_GROUP)
 public final class BottomNavigationMenu extends MenuBuilder {
-  public static final int MAX_ITEM_COUNT = 5;
+  public static final int MAX_ITEM_COUNT = 6;
 
   public BottomNavigationMenu(Context context) {
     super(context);
