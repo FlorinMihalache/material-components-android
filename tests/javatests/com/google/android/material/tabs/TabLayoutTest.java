@@ -23,11 +23,12 @@ import static com.google.android.material.testutils.TabLayoutActions.setScrollPo
 import static com.google.android.material.testutils.TabLayoutActions.setTabMode;
 import static com.google.android.material.testutils.TestUtilsActions.setLayoutDirection;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -38,6 +39,10 @@ import android.animation.AnimatorListenerAdapter;
 import android.annotation.TargetApi;
 import android.os.Build;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionItemInfoCompat;
 import androidx.appcompat.app.AppCompatActivity;
 import android.view.InflateException;
 import android.view.LayoutInflater;
@@ -53,7 +58,9 @@ import androidx.test.filters.SmallTest;
 import androidx.test.rule.ActivityTestRule;
 import androidx.test.runner.AndroidJUnit4;
 import com.google.android.material.tabs.TabLayout.Tab;
+import com.google.android.material.tabs.TabLayout.TabView;
 import com.google.android.material.testapp.R;
+import com.google.android.material.testutils.AccessibilityUtils;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Rule;
 import org.junit.Test;
@@ -293,6 +300,43 @@ public class TabLayoutTest {
     IdlingRegistry.getInstance().unregister(idler);
   }
 
+  @Test
+  @SdkSuppress(minSdkVersion = Build.VERSION_CODES.M)
+  public void initializesAccessibilityNodeInfo() {
+    final LayoutInflater inflater = LayoutInflater.from(activityTestRule.getActivity());
+    final TabLayout tabs = (TabLayout) inflater.inflate(R.layout.design_tabs, null);
+
+    final TabLayout.Tab tab1 = tabs.newTab();
+    tabs.addTab(tab1);
+    final TabLayout.Tab tab2 = tabs.newTab();
+    tabs.addTab(tab2, true);
+
+    tabs.getTabAt(0).setCustomView(R.layout.design_tab_item_custom);
+    tabs.getTabAt(1).setCustomView(R.layout.design_tab_item_custom);
+
+    AccessibilityNodeInfoCompat groupInfoCompat = AccessibilityNodeInfoCompat.obtain();
+    ViewCompat.onInitializeAccessibilityNodeInfo(tabs, groupInfoCompat);
+
+    CollectionInfoCompat collectionInfo = groupInfoCompat.getCollectionInfo();
+    assertEquals(2, collectionInfo.getColumnCount());
+    assertEquals(1, collectionInfo.getRowCount());
+
+    TabView secondChild = tabs.getTabAt(1).view;
+    secondChild.setSelected(true);
+    AccessibilityNodeInfoCompat tabInfoCompat = AccessibilityNodeInfoCompat.obtain();
+    ViewCompat.onInitializeAccessibilityNodeInfo(secondChild, tabInfoCompat);
+
+    // A tab that is currently selected won't be clickable
+    assertFalse(tabInfoCompat.isClickable());
+    assertFalse(
+        AccessibilityUtils.hasAction(tabInfoCompat, AccessibilityActionCompat.ACTION_CLICK));
+
+    CollectionItemInfoCompat itemInfo = tabInfoCompat.getCollectionItemInfo();
+    assertEquals(1, itemInfo.getColumnIndex());
+    assertEquals(0, itemInfo.getRowIndex());
+    assertTrue(itemInfo.isSelected());
+  }
+
   private void testSetScrollPosition(final boolean isLtr) throws Throwable {
     activityTestRule.runOnUiThread(
         () -> activityTestRule.getActivity().setContentView(R.layout.design_tabs_fixed_width));
@@ -335,6 +379,46 @@ public class TabLayoutTest {
     }
 
     Espresso.unregisterIdlingResources(idler);
+  }
+
+  /**
+   * Tests that the indicator animation still functions as intended when modifying the animator's
+   * update listener, instead of removing/recreating the animator itself.
+   */
+  @Test
+  public void testIndicatorAnimator_worksAfterReplacingUpdateListener() throws Throwable {
+    activityTestRule.runOnUiThread(
+        () -> activityTestRule.getActivity().setContentView(R.layout.design_tabs_items));
+    final TabLayout tabs = activityTestRule.getActivity().findViewById(R.id.tabs);
+
+    onView(withId(R.id.tabs)).perform(setTabMode(TabLayout.MODE_FIXED));
+
+    final TabLayoutScrollIdlingResource idler = new TabLayoutScrollIdlingResource(tabs);
+    IdlingRegistry.getInstance().register(idler);
+
+    // We need to click a tab once to set up the indicator animation (so that it's not still null).
+    onView(withId(R.id.tabs)).perform(selectTab(1));
+
+    // Select new tab. This action should modify the listener on the animator.
+    onView(withId(R.id.tabs)).perform(selectTab(2));
+
+    onView(withId(R.id.tabs))
+        .check(
+            (view, notFoundException) -> {
+              if (view == null) {
+                throw notFoundException;
+              }
+
+              TabLayout tabs1 = (TabLayout) view;
+
+              int tabTwoLeft = tabs1.getTabAt(/* index= */ 2).view.getLeft();
+              int tabTwoRight = tabs1.getTabAt(/* index= */ 2).view.getRight();
+
+              assertEquals(tabs1.slidingTabIndicator.indicatorLeft, tabTwoLeft);
+              assertEquals(tabs1.slidingTabIndicator.indicatorRight, tabTwoRight);
+            });
+
+    IdlingRegistry.getInstance().unregister(idler);
   }
 
   static class TabLayoutScrollIdlingResource implements IdlingResource {

@@ -29,8 +29,11 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.RestrictTo;
 import androidx.annotation.StyleRes;
+import androidx.annotation.VisibleForTesting;
 import androidx.core.util.Pools;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionInfoCompat;
 import androidx.appcompat.content.res.AppCompatResources;
 import androidx.appcompat.view.menu.MenuBuilder;
 import androidx.appcompat.view.menu.MenuItemImpl;
@@ -42,6 +45,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
 import androidx.interpolator.view.animation.FastOutSlowInInterpolator;
 import androidx.transition.AutoTransition;
 import androidx.transition.TransitionManager;
@@ -126,6 +130,8 @@ public class BottomNavigationMenuView extends ViewGroup implements MenuView {
           }
         };
     tempChildWidths = new int[BottomNavigationMenu.MAX_ITEM_COUNT];
+
+    ViewCompat.setImportantForAccessibility(this, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_YES);
   }
 
   @Override
@@ -234,6 +240,18 @@ public class BottomNavigationMenuView extends ViewGroup implements MenuView {
   @Override
   public int getWindowAnimations() {
     return 0;
+  }
+
+  @Override
+  public void onInitializeAccessibilityNodeInfo(@NonNull AccessibilityNodeInfo info) {
+    super.onInitializeAccessibilityNodeInfo(info);
+    AccessibilityNodeInfoCompat infoCompat = AccessibilityNodeInfoCompat.wrap(info);
+    infoCompat.setCollectionInfo(
+        CollectionInfoCompat.obtain(
+            /* rowCount= */ 1,
+            /* columnCount= */ menu.getVisibleItems().size(),
+            /* hierarchical= */ false,
+            /* selectionMode = */ CollectionInfoCompat.SELECTION_MODE_SINGLE));
   }
 
   /**
@@ -619,6 +637,11 @@ public class BottomNavigationMenuView extends ViewGroup implements MenuView {
 
   void setBadgeDrawables(SparseArray<BadgeDrawable> badgeDrawables) {
     this.badgeDrawables = badgeDrawables;
+    if (buttons != null) {
+      for (BottomNavigationItemView itemView : buttons) {
+        itemView.setBadge(badgeDrawables.get(itemView.getId()));
+      }
+    }
   }
 
   @Nullable
@@ -689,7 +712,8 @@ public class BottomNavigationMenuView extends ViewGroup implements MenuView {
   }
 
   @Nullable
-  private BottomNavigationItemView findItemView(int menuItemId) {
+  @VisibleForTesting
+  BottomNavigationItemView findItemView(int menuItemId) {
     validateMenuItemId(menuItemId);
     if (buttons != null) {
       for (BottomNavigationItemView itemView : buttons) {

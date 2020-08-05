@@ -25,6 +25,8 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.Toast;
+import com.google.android.material.switchmaterial.SwitchMaterial;
 import com.google.android.material.textfield.TextInputEditText;
 import com.google.android.material.textfield.TextInputLayout;
 
@@ -84,6 +86,16 @@ public abstract class TextFieldControllableDemoFragment extends TextFieldDemoFra
                     String.valueOf(helperTextTextField.getEditText().getText()));
               }
             });
+    // Initialize button for updating the placeholder text.
+    TextInputLayout placeholderTextField = view.findViewById(R.id.text_input_placeholder);
+    view.findViewById(R.id.button_update_placeholder)
+        .setOnClickListener(
+            v -> {
+              if (!checkTextInputIsNull(placeholderTextField)) {
+                setAllTextFieldsPlaceholder(
+                    String.valueOf(placeholderTextField.getEditText().getText()));
+              }
+            });
 
     // Initialize button for updating the counter max.
     TextInputLayout counterMaxTextField = view.findViewById(R.id.text_input_counter_max);
@@ -96,6 +108,15 @@ public abstract class TextFieldControllableDemoFragment extends TextFieldDemoFra
                 setAllTextFieldsCounterMax(length);
               }
             });
+
+    // Initializing switch to toggle between disabling or enabling text fields.
+    SwitchMaterial enabledSwitch = view.findViewById(R.id.cat_textfield_enabled_switch);
+    enabledSwitch.setOnCheckedChangeListener(
+        (buttonView, isChecked) -> {
+          for (TextInputLayout textfield : textfields) {
+            textfield.setEnabled(isChecked);
+          }
+        });
   }
 
   private void changeTextFieldColors(int color) {
@@ -116,6 +137,13 @@ public abstract class TextFieldControllableDemoFragment extends TextFieldDemoFra
     ViewGroup parent = (ViewGroup) textfields.get(0).getParent();
     boolean textfieldWithErrorHasFocus = false;
     for (TextInputLayout textfield : textfields) {
+      textfield.setErrorIconOnClickListener(
+          v -> Toast.makeText(getContext(), "Error icon clicked.", Toast.LENGTH_LONG).show());
+      textfield.setErrorIconOnLongClickListener(
+          v -> {
+            Toast.makeText(getContext(), "Error icon long clicked.", Toast.LENGTH_LONG).show();
+            return true;
+          });
       textfield.setError(error);
       textfieldWithErrorHasFocus |= textfield.hasFocus();
     }
@@ -128,6 +156,12 @@ public abstract class TextFieldControllableDemoFragment extends TextFieldDemoFra
   private void setAllTextFieldsHelperText(String helperText) {
     for (TextInputLayout textfield : textfields) {
       textfield.setHelperText(helperText);
+    }
+  }
+
+  private void setAllTextFieldsPlaceholder(String placeholder) {
+    for (TextInputLayout textfield : textfields) {
+      textfield.setPlaceholderText(placeholder);
     }
   }
 

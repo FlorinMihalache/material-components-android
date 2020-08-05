@@ -23,7 +23,7 @@ import java.util.Arrays;
 import java.util.Calendar;
 
 /**
- * Used to limit the display range of {@link MaterialCalendar} and set an openAt month.
+ * Used to limit the display range of the calendar and set an openAt month.
  *
  * <p>Implements {@link Parcelable} in order to maintain the {@code CalendarConstraints} across
  * device configuration changes. Parcelable breaks when passed between processes.
@@ -39,7 +39,7 @@ public final class CalendarConstraints implements Parcelable {
   private final int monthSpan;
 
   /**
-   * Used to determine whether {@link MaterialCalendar} days are enabled.
+   * Used to determine whether calendar days are enabled.
    *
    * <p>Extends {@link Parcelable} in order to maintain the {@code DateValidator} across device
    * configuration changes. Parcelable breaks when passed between processes.
@@ -77,19 +77,19 @@ public final class CalendarConstraints implements Parcelable {
     return validator;
   }
 
-  /** Returns the earliest {@link Month} allowed by this set of bounds. */
+  /** Returns the earliest month allowed by this set of bounds. */
   @NonNull
   Month getStart() {
     return start;
   }
 
-  /** Returns the latest {@link Month} allowed by this set of bounds. */
+  /** Returns the latest month allowed by this set of bounds. */
   @NonNull
   Month getEnd() {
     return end;
   }
 
-  /** Returns the openAt {@link Month} within this set of bounds. */
+  /** Returns the openAt month within this set of bounds. */
   @NonNull
   Month getOpenAt() {
     return openAt;
@@ -165,6 +165,21 @@ public final class CalendarConstraints implements Parcelable {
     dest.writeParcelable(end, /* parcelableFlags= */ 0);
     dest.writeParcelable(openAt, /* parcelableFlags= */ 0);
     dest.writeParcelable(validator, /* parcelableFlags = */ 0);
+  }
+
+  /**
+   * Returns the given month if it's within the constraints or the closest bound if it's outside.
+   */
+  Month clamp(Month month) {
+    if (month.compareTo(start) < 0) {
+      return start;
+    }
+
+    if (month.compareTo(end) > 0) {
+      return end;
+    }
+
+    return month;
   }
 
   /** Builder for {@link com.google.android.material.datepicker.CalendarConstraints}. */
@@ -294,7 +309,7 @@ public final class CalendarConstraints implements Parcelable {
     @NonNull
     public CalendarConstraints build() {
       if (openAt == null) {
-        long today = MaterialDatePicker.todayInUtcMilliseconds();
+        long today = MaterialDatePicker.thisMonthInUtcMilliseconds();
         openAt = start <= today && today <= end ? today : start;
       }
       Bundle deepCopyBundle = new Bundle();

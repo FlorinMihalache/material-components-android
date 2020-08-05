@@ -174,9 +174,9 @@ You can change a component's shape across the entire app by overriding the
 component and defining a custom `shapeAppearanceOverlay`.
 
 Let's say you wanted to modify `MaterialCardView` so that it uses 16dp rounded
-corners acrss the entire app. All you'd have to do is define your own card style
-that extends from the widget's style, and set the relevant attributes to the
-desired theme attributes:
+corners across the entire app. All you'd have to do is define your own card
+style that extends from the widget's style, and set the relevant attributes to
+the desired theme attributes:
 
 ```xml
 <style name="Widget.MyApp.MaterialCardView" parent="Widget.MaterialComponents.MaterialCardView">
@@ -248,10 +248,14 @@ Components that support shape theming have a `shapeAppearance` attribute, a
 `shapeAppearanceOverlay` attribute, and are backed by a `MaterialShapeDrawable`.
 
 *   [Bottom Sheet](../components/BottomSheetBehavior.md)
-*   [Button](../components/MaterialButton.md)
-*   [Floating Action Button](../components/FloatingActionButton.md)
-*   [Card](../components/MaterialCardView.md)
+*   [Card](../components/Card.md)
 *   [Chip](../components/Chip.md)
+*   [Date Picker](../components/Picker.md)
 *   [Dialog](../components/Dialog.md)
-*   [Menu](../components/Menu.md)
-*   [Text Field](../components/TextInputLayout.md)
+*   [Extended Floating Action Button](../components/FloatingActionButton.md?#extended-fabs)
+*   [Floating Action Button](../components/FloatingActionButton.md)
+*   [Button](../components/Button.md)
+*   [Toggle Button](../components/Button.md?#toggle-button)
+*   [Navigation View](../components/NavigationView.md)
+*   [Slider](../components/Slider.md)
+*   [Text Field](../components/TextField.md)

@@ -18,6 +18,8 @@ package com.google.android.material.chip;
 
 import com.google.android.material.R;
 
+import static com.google.android.material.theme.overlay.MaterialThemeOverlay.wrap;
+
 import android.annotation.SuppressLint;
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -51,6 +53,7 @@ import androidx.annotation.StyleRes;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
 import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionItemInfoCompat;
 import androidx.customview.widget.ExploreByTouchHelper;
 import androidx.appcompat.widget.AppCompatCheckBox;
 import android.text.TextPaint;
@@ -127,6 +130,8 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
 
   private static final String TAG = "Chip";
 
+  private static final int DEF_STYLE_RES = R.style.Widget_MaterialComponents_Chip_Action;
+
   private static final int CHIP_BODY_VIRTUAL_ID = 0;
   private static final int CLOSE_ICON_VIRTUAL_ID = 1;
   private static final Rect EMPTY_BOUNDS = new Rect();
@@ -187,11 +192,14 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
   }
 
   public Chip(Context context, AttributeSet attrs, int defStyleAttr) {
-    super(context, attrs, defStyleAttr);
+    super(wrap(context, attrs, defStyleAttr, DEF_STYLE_RES), attrs, defStyleAttr);
+    // Ensure we are using the correctly themed context rather than the context that was passed in.
+    context = getContext();
+
     validateAttributes(attrs);
     ChipDrawable drawable =
         ChipDrawable.createFromAttributes(
-            context, attrs, defStyleAttr, R.style.Widget_MaterialComponents_Chip_Action);
+            context, attrs, defStyleAttr, DEF_STYLE_RES);
     initMinTouchTarget(context, attrs, defStyleAttr);
     setChipDrawable(drawable);
     drawable.setElevation(ViewCompat.getElevation(this));
@@ -201,7 +209,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
             attrs,
             R.styleable.Chip,
             defStyleAttr,
-            R.style.Widget_MaterialComponents_Chip_Action);
+            DEF_STYLE_RES);
     if (VERSION.SDK_INT < VERSION_CODES.M) {
       // This is necessary to work around a bug that doesn't support themed color referenced in
       // ColorStateList for API level < 23.
@@ -221,12 +229,12 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
     setText(drawable.getText());
     setEllipsize(drawable.getEllipsize());
 
-    setIncludeFontPadding(false);
     updateTextPaintDrawState();
 
     // Chip text should not extend to more than 1 line.
     if (!chipDrawable.shouldDrawText()) {
-      setSingleLine();
+      setLines(1);
+      setHorizontallyScrolling(true);
     }
     // Chip text should be vertically center aligned and start aligned.
     // Final horizontal text origin is set during the onDraw call via canvas translation.
@@ -268,6 +276,21 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
     }
     info.setCheckable(isCheckable());
     info.setClickable(isClickable());
+
+    if (getParent() instanceof ChipGroup) {
+      ChipGroup chipGroup = ((ChipGroup) getParent());
+      AccessibilityNodeInfoCompat infoCompat = AccessibilityNodeInfoCompat.wrap(info);
+      // -1 for unknown column indices in a reflowing layout
+      int columnIndex = chipGroup.isSingleLine() ? chipGroup.getIndexOfChip(this) : -1;
+      infoCompat.setCollectionItemInfo(
+          CollectionItemInfoCompat.obtain(
+              /* rowIndex= */ chipGroup.getRowIndex(this),
+              /* rowSpan= */ 1,
+              /* columnIndex= */ columnIndex,
+              /* columnSpan= */ 1,
+              /* heading= */ false,
+              /* selected= */ isChecked()));
+    }
   }
 
   // TODO(b/80452017): Due to a11y bug, avoid setting custom ExploreByTouchHelper as delegate
@@ -282,9 +305,6 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
   }
 
   private void initMinTouchTarget(Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-    if (attrs == null) {
-      return;
-    }
     // Checks if the Chip should meet Android's minimum touch target size.
     TypedArray a =
         ThemeEnforcement.obtainStyledAttributes(
@@ -292,7 +312,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
             attrs,
             R.styleable.Chip,
             defStyleAttr,
-            R.style.Widget_MaterialComponents_Chip_Action);
+            DEF_STYLE_RES);
     ensureMinTouchTargetSize = a.getBoolean(R.styleable.Chip_ensureMinTouchTargetSize, false);
 
     float defaultMinTouchTargetSize =
@@ -323,6 +343,12 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
             (chipDrawable.getChipStartPadding()
                 + chipDrawable.getTextStartPadding()
                 + chipDrawable.calculateChipIconWidth());
+    if (insetBackgroundDrawable != null) {
+      Rect padding = new Rect();
+      insetBackgroundDrawable.getPadding(padding);
+      paddingStart += padding.left;
+      paddingEnd += padding.right;
+    }
 
     ViewCompat.setPaddingRelative(
         this, paddingStart, getPaddingTop(), paddingEnd, getPaddingBottom());
@@ -406,7 +432,6 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
       chipDrawable.setShouldDrawText(false);
       applyChipDrawable(chipDrawable);
       ensureAccessibleTouchTarget(minTouchTargetSize);
-      updateBackgroundDrawable();
     }
   }
 
@@ -416,6 +441,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
     } else {
       chipDrawable.setUseCompatRipple(true);
       ViewCompat.setBackground(this, getBackgroundDrawable());
+      updatePaddingInternal();
       ensureChipDrawableHasCallback();
     }
   }
@@ -446,6 +472,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
     chipDrawable.setUseCompatRipple(false);
     //noinspection NewApi
     ViewCompat.setBackground(this, ripple);
+    updatePaddingInternal();
   }
 
   private void unapplyChipDrawable(@Nullable ChipDrawable chipDrawable) {
@@ -667,8 +694,6 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
   @Override
   public void onChipDrawableSizeChange() {
     ensureAccessibleTouchTarget(minTouchTargetSize);
-    updateBackgroundDrawable();
-    updatePaddingInternal();
     requestLayout();
     if (VERSION.SDK_INT >= VERSION_CODES.LOLLIPOP) {
       invalidateOutline();
@@ -1136,11 +1161,11 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
    * @attr ref com.google.android.material.R.styleable#Chip_chipCornerRadius
    */
   public float getChipCornerRadius() {
-    return chipDrawable != null ? chipDrawable.getChipCornerRadius() : 0;
+    return chipDrawable != null ? Math.max(0, chipDrawable.getChipCornerRadius()) : 0;
   }
 
   /**
-   * @deprecated call {@link ShapeAppearanceModel#withCornerSize()} or call {@link
+   * @deprecated call {@link ShapeAppearanceModel#withCornerSize(float)} or call {@link
    *     ShapeAppearanceModel#toBuilder()} on the {@link #getShapeAppearanceModel()}, modify the
    *     shape using the builder and then call {@link
    *     #setShapeAppearanceModel(ShapeAppearanceModel)}.
@@ -1164,7 +1189,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
   }
 
   /**
-   * @deprecated call {@link ShapeAppearanceModel#withCornerSize()} or call {@link
+   * @deprecated call {@link ShapeAppearanceModel#withCornerSize(float)} or call {@link
    *     ShapeAppearanceModel#toBuilder()} on the {@link #getShapeAppearanceModel()}, modify the
    *     shape using the builder and then call {@link
    *     #setShapeAppearanceModel(ShapeAppearanceModel)}.
@@ -1336,7 +1361,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
    * Sets this chip's text appearance using a resource id.
    *
    * @param id The resource id of this chip's text appearance.
-   * @attr ref com.google.android.material.R.styleable#Chip_android_textappearance
+   * @attr ref com.google.android.material.R.styleable#Chip_android_textAppearance
    */
   public void setTextAppearanceResource(@StyleRes int id) {
     this.setTextAppearance(getContext(), id);
@@ -1346,7 +1371,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
    * Sets this chip's text appearance.
    *
    * @param textAppearance This chip's text appearance.
-   * @attr ref com.google.android.material.R.styleable#Chip_android_textappearance
+   * @attr ref com.google.android.material.R.styleable#Chip_android_textAppearance
    */
   public void setTextAppearance(@Nullable TextAppearance textAppearance) {
     if (chipDrawable != null) {
@@ -1392,8 +1417,8 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
   /**
    * Returns whether this chip's icon is visible.
    *
-   * @see #setChipIsVisible(boolean)
-   * @attr ref com.google.android.material.R.styleable#Chip_chipIconIsVisible
+   * @see #setChipIconVisible(boolean)
+   * @attr ref com.google.android.material.R.styleable#Chip_chipIconVisible
    */
   public boolean isChipIconVisible() {
     return chipDrawable != null && chipDrawable.isChipIconVisible();
@@ -1409,7 +1434,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
    * Sets the visibility of this chip's icon using a resource id.
    *
    * @param id The resource id for the visibility of this chip's icon.
-   * @attr ref com.google.android.material.R.styleable#Chip_chipIconIsVisible
+   * @attr ref com.google.android.material.R.styleable#Chip_chipIconVisible
    */
   public void setChipIconVisible(@BoolRes int id) {
     if (chipDrawable != null) {
@@ -1846,6 +1871,42 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
   }
 
   /**
+   * Returns the {@link android.content.res.ColorStateList} used to tint the checked icon.
+   *
+   * @see #setCheckedIconTint(ColorStateList)
+   * @attr ref com.google.android.material.R.styleable#Chip_checkedIconTint
+   */
+  @Nullable
+  public ColorStateList getCheckedIconTint() {
+    return chipDrawable != null ? chipDrawable.getCheckedIconTint() : null;
+  }
+
+  /**
+   * Sets this chip's checked icon's color tint using a resource id.
+   *
+   * @param id The resource id for tinting the checked icon.
+   * @attr ref com.google.android.material.R.styleable#Chip_checkedIconTint
+   */
+  public void setCheckedIconTintResource(@ColorRes int id) {
+    if (chipDrawable != null) {
+      chipDrawable.setCheckedIconTintResource(id);
+    }
+  }
+
+  /**
+   * Sets this chip's checked icon's color tint using the specified {@link
+   * android.content.res.ColorStateList}.
+   *
+   * @param checkedIconTint The tint color of this chip's checked icon.
+   * @attr ref com.google.android.material.R.styleable#Chip_checkedIconTint
+   */
+  public void setCheckedIconTint(@Nullable ColorStateList checkedIconTint) {
+    if (chipDrawable != null) {
+      chipDrawable.setCheckedIconTint(checkedIconTint);
+    }
+  }
+
+  /**
    * Returns this chip's show motion spec.
    *
    * @see #setShowMotionSpec(Drawable)
@@ -2220,7 +2281,11 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
   public boolean ensureAccessibleTouchTarget(@Dimension int minTargetPx) {
     minTouchTargetSize = minTargetPx;
     if (!shouldEnsureMinTouchTargetSize()) {
-      removeBackgroundInset();
+      if (insetBackgroundDrawable != null) {
+        removeBackgroundInset();
+      } else {
+        updateBackgroundDrawable();
+      }
       return false;
     }
 
@@ -2228,7 +2293,11 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
     int deltaWidth = Math.max(0, minTargetPx - chipDrawable.getIntrinsicWidth());
 
     if (deltaWidth <= 0 && deltaHeight <= 0) {
-      removeBackgroundInset();
+      if (insetBackgroundDrawable != null) {
+        removeBackgroundInset();
+      } else {
+        updateBackgroundDrawable();
+      }
       return false;
     }
 
@@ -2242,6 +2311,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
           && padding.bottom == deltaY
           && padding.left == deltaX
           && padding.right == deltaX) {
+        updateBackgroundDrawable();
         return true;
       }
     }
@@ -2257,6 +2327,7 @@ public class Chip extends AppCompatCheckBox implements Delegate, Shapeable {
       setMinWidth(minTargetPx);
     }
     insetChipBackgroundDrawable(deltaX, deltaY, deltaX, deltaY);
+    updateBackgroundDrawable();
     return true;
   }
 

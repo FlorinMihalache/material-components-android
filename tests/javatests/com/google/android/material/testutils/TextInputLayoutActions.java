@@ -99,6 +99,26 @@ public class TextInputLayoutActions {
     };
   }
 
+  public static ViewAction setErrorContentDescription(final CharSequence errorContentDesc) {
+    return new ViewAction() {
+      @Override
+      public Matcher<View> getConstraints() {
+        return isAssignableFrom(TextInputLayout.class);
+      }
+
+      @Override
+      public String getDescription() {
+        return "Sets the error message's content description";
+      }
+
+      @Override
+      public void perform(UiController uiController, View view) {
+        TextInputLayout layout = (TextInputLayout) view;
+        layout.setErrorContentDescription(errorContentDesc);
+      }
+    };
+  }
+
   public static ViewAction setHelperTextEnabled(final boolean enabled) {
     return new ViewAction() {
       @Override
@@ -155,6 +175,46 @@ public class TextInputLayoutActions {
       public void perform(UiController uiController, View view) {
         TextInputLayout layout = (TextInputLayout) view;
         layout.setHelperTextTextAppearance(resId);
+      }
+    };
+  }
+
+  public static ViewAction setPlaceholderText(final CharSequence placeholder) {
+    return new ViewAction() {
+      @Override
+      public Matcher<View> getConstraints() {
+        return isAssignableFrom(TextInputLayout.class);
+      }
+
+      @Override
+      public String getDescription() {
+        return "Sets the placeholder";
+      }
+
+      @Override
+      public void perform(UiController uiController, View view) {
+        TextInputLayout layout = (TextInputLayout) view;
+        layout.setPlaceholderText(placeholder);
+      }
+    };
+  }
+
+  public static ViewAction setPlaceholderTextAppearance(final int resId) {
+    return new ViewAction() {
+      @Override
+      public Matcher<View> getConstraints() {
+        return isAssignableFrom(TextInputLayout.class);
+      }
+
+      @Override
+      public String getDescription() {
+        return "Sets the placeholder text appearance";
+      }
+
+      @Override
+      public void perform(UiController uiController, View view) {
+        TextInputLayout layout = (TextInputLayout) view;
+        layout.setPlaceholderTextAppearance(resId);
       }
     };
   }
@@ -239,6 +299,26 @@ public class TextInputLayoutActions {
       public void perform(UiController uiController, View view) {
         TextInputLayout layout = (TextInputLayout) view;
         layout.setEndIconOnLongClickListener(onLongClickListener);
+      }
+    };
+  }
+
+  public static ViewAction setErrorIconOnClickListener(final OnClickListener onClickListener) {
+    return new ViewAction() {
+      @Override
+      public Matcher<View> getConstraints() {
+        return isAssignableFrom(TextInputLayout.class);
+      }
+
+      @Override
+      public String getDescription() {
+        return "Set error icon OnClickListener";
+      }
+
+      @Override
+      public void perform(UiController uiController, View view) {
+        TextInputLayout layout = (TextInputLayout) view;
+        layout.setErrorIconOnClickListener(onClickListener);
       }
     };
   }
@@ -441,6 +521,58 @@ public class TextInputLayoutActions {
       public void perform(UiController uiController, View view) {
         TextInputLayout layout = (TextInputLayout) view;
         layout.setBoxStrokeErrorColor(strokeErrorColor);
+      }
+    };
+  }
+
+  /**
+   * Sets the text field's stroke width.
+   *
+   * @param strokeWidth the value to use for the text field box's stroke
+   * @return the action of setting the box stroke width on a {@link TextInputLayout}
+   */
+  public static ViewAction setBoxStrokeWidth(final int strokeWidth) {
+    return new ViewAction() {
+      @Override
+      public Matcher<View> getConstraints() {
+        return isAssignableFrom(TextInputLayout.class);
+      }
+
+      @Override
+      public String getDescription() {
+        return "Sets the box's stroke width.";
+      }
+
+      @Override
+      public void perform(UiController uiController, View view) {
+        TextInputLayout layout = (TextInputLayout) view;
+        layout.setBoxStrokeWidth(strokeWidth);
+      }
+    };
+  }
+
+  /**
+   * Sets the text field's focused stroke width.
+   *
+   * @param strokeWidthFocused the value to use for the text field box's stroke when focused
+   * @return the action of setting the box's focused stroke width on a {@link TextInputLayout}
+   */
+  public static ViewAction setBoxStrokeWidthFocused(final int strokeWidthFocused) {
+    return new ViewAction() {
+      @Override
+      public Matcher<View> getConstraints() {
+        return isAssignableFrom(TextInputLayout.class);
+      }
+
+      @Override
+      public String getDescription() {
+        return "Sets the box's stroke width when focused.";
+      }
+
+      @Override
+      public void perform(UiController uiController, View view) {
+        TextInputLayout layout = (TextInputLayout) view;
+        layout.setBoxStrokeWidthFocused(strokeWidthFocused);
       }
     };
   }

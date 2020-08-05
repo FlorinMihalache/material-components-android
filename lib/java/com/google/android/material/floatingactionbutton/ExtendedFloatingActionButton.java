@@ -18,6 +18,9 @@ package com.google.android.material.floatingactionbutton;
 
 import com.google.android.material.R;
 
+import static android.view.ViewGroup.LayoutParams.WRAP_CONTENT;
+import static com.google.android.material.theme.overlay.MaterialThemeOverlay.wrap;
+
 import android.animation.Animator;
 import android.animation.Animator.AnimatorListener;
 import android.animation.AnimatorListenerAdapter;
@@ -26,7 +29,6 @@ import android.animation.PropertyValuesHolder;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import androidx.annotation.AnimatorRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -48,7 +50,6 @@ import com.google.android.material.bottomsheet.BottomSheetBehavior;
 import com.google.android.material.button.MaterialButton;
 import com.google.android.material.internal.DescendantOffsetUtils;
 import com.google.android.material.internal.ThemeEnforcement;
-import com.google.android.material.shape.CornerSize;
 import com.google.android.material.shape.ShapeAppearanceModel;
 import java.util.List;
 
@@ -64,7 +65,7 @@ import java.util.List;
  * displayed via {@link #setIcon(android.graphics.drawable.Drawable)}, and the text via {@link
  * #setText(CharSequence)}.
  *
- * <p>The background color of this view defaults to the your theme's {@code colorPrimary}. If you
+ * <p>The background color of this view defaults to the your theme's {@code colorSecondary}. If you
  * wish to change this at runtime then you can do so via
  * {@link #setBackgroundTintList(android.content.res.ColorStateList)}.
  */
@@ -137,10 +138,12 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
     this(context, attrs, R.attr.extendedFloatingActionButtonStyle);
   }
 
-  @SuppressWarnings("initialization")
+  @SuppressWarnings("nullness")
   public ExtendedFloatingActionButton(
       @NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
-    super(context, attrs, defStyleAttr);
+    super(wrap(context, attrs, defStyleAttr, DEF_STYLE_RES), attrs, defStyleAttr);
+    // Ensure we are using the correctly themed context rather than the context that was passed in.
+    context = getContext();
     behavior = new ExtendedFloatingActionButtonBehavior<>(context, attrs);
     TypedArray a =
         ThemeEnforcement.obtainStyledAttributes(
@@ -172,6 +175,11 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
           public int getHeight() {
             return getMeasuredHeight();
           }
+
+          @Override
+          public LayoutParams getLayoutParams() {
+            return new LayoutParams(WRAP_CONTENT, WRAP_CONTENT);
+          }
         },
         /* extending= */ true);
 
@@ -187,6 +195,11 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
           public int getHeight() {
             return getCollapsedSize();
           }
+
+          @Override
+          public LayoutParams getLayoutParams() {
+            return new LayoutParams(getWidth(), getHeight());
+          }
         },
         /* extending= */ false);
 
@@ -198,18 +211,8 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
 
     ShapeAppearanceModel shapeAppearanceModel =
         ShapeAppearanceModel.builder(
-                context,
-                attrs,
-                defStyleAttr,
-                DEF_STYLE_RES,
-                // TODO(b/121352029): Use ShapeAppearanceModel.PILL once this bug is fixed.
-                new CornerSize() {
-                  @Override
-                  public float getCornerSize(@NonNull RectF bounds) {
-                    return getAdjustedRadius((int) bounds.height());
-                  }
-                })
-            .build();
+            context, attrs, defStyleAttr, DEF_STYLE_RES, ShapeAppearanceModel.PILL
+        ).build();
     setShapeAppearanceModel(shapeAppearanceModel);
   }
 
@@ -639,15 +642,6 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
       };
 
   /**
-   * Returns an adjusted radius value that corrects any rounding errors.
-   *
-   * <p>TODO(b/121352029): Remove this method once this bug is fixed.
-   */
-  private int getAdjustedRadius(int value) {
-    return (value - 1) / 2;
-  }
-
-  /**
    * Shrink to the smaller value between paddingStart and paddingEnd, such that when shrunk the icon
    * will be centered.
    */
@@ -933,6 +927,7 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
   interface Size {
     int getWidth();
     int getHeight();
+    LayoutParams getLayoutParams();
   }
 
   class ChangeSizeStrategy extends BaseMotionStrategy {
@@ -954,12 +949,8 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
         return;
       }
 
-      if (extending) {
-        measure(MeasureSpec.UNSPECIFIED, MeasureSpec.UNSPECIFIED);
-      }
-
-      layoutParams.width = size.getWidth();
-      layoutParams.height = size.getHeight();
+      layoutParams.width = size.getLayoutParams().width;
+      layoutParams.height = size.getLayoutParams().height;
       requestLayout();
     }
 
@@ -1011,6 +1002,13 @@ public class ExtendedFloatingActionButton extends MaterialButton implements Atta
     public void onAnimationEnd() {
       super.onAnimationEnd();
       setHorizontallyScrolling(false);
+
+      LayoutParams layoutParams = getLayoutParams();
+      if (layoutParams == null) {
+        return;
+      }
+      layoutParams.width = size.getLayoutParams().width;
+      layoutParams.height = size.getLayoutParams().height;
     }
 
     @Override

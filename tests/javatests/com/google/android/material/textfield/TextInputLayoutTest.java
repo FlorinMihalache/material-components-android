@@ -33,15 +33,19 @@ import static com.google.android.material.testutils.TextInputLayoutActions.setBo
 import static com.google.android.material.testutils.TextInputLayoutActions.setBoxCornerRadii;
 import static com.google.android.material.testutils.TextInputLayoutActions.setBoxStrokeColor;
 import static com.google.android.material.testutils.TextInputLayoutActions.setBoxStrokeErrorColor;
+import static com.google.android.material.testutils.TextInputLayoutActions.setBoxStrokeWidth;
+import static com.google.android.material.testutils.TextInputLayoutActions.setBoxStrokeWidthFocused;
 import static com.google.android.material.testutils.TextInputLayoutActions.setCounterEnabled;
 import static com.google.android.material.testutils.TextInputLayoutActions.setCounterMaxLength;
 import static com.google.android.material.testutils.TextInputLayoutActions.setError;
+import static com.google.android.material.testutils.TextInputLayoutActions.setErrorContentDescription;
 import static com.google.android.material.testutils.TextInputLayoutActions.setErrorEnabled;
 import static com.google.android.material.testutils.TextInputLayoutActions.setErrorTextAppearance;
 import static com.google.android.material.testutils.TextInputLayoutActions.setHelperText;
 import static com.google.android.material.testutils.TextInputLayoutActions.setHelperTextEnabled;
 import static com.google.android.material.testutils.TextInputLayoutActions.setHint;
 import static com.google.android.material.testutils.TextInputLayoutActions.setHintTextAppearance;
+import static com.google.android.material.testutils.TextInputLayoutActions.setPlaceholderText;
 import static com.google.android.material.testutils.TextInputLayoutActions.setTypeface;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
@@ -91,6 +95,7 @@ public class TextInputLayoutTest {
   private static final String ERROR_MESSAGE_2 = "Some other error has occurred";
   private static final String HELPER_MESSAGE_1 = "Helpful helper text";
   private static final String HELPER_MESSAGE_2 = "Some other helper text";
+  private static final String PLACEHOLDER_TEXT = "This text is holding the place";
   private static final String HINT_TEXT = "Hint text";
   private static final String INPUT_TEXT = "Random input text";
   private static final Typeface CUSTOM_TYPEFACE = Typeface.SANS_SERIF;
@@ -257,6 +262,44 @@ public class TextInputLayoutTest {
   }
 
   @Test
+  public void testSetPlaceholderText() {
+    onView(withId(R.id.textinput_box_outline)).perform(setPlaceholderText(PLACEHOLDER_TEXT));
+
+    // Click on the EditText so that the hint collapses and the placeholder text is shown.
+    onView(withId(R.id.textinput_edittext_outline)).perform(click());
+
+    // Check that the placeholder text is displayed.
+    onView(withText(PLACEHOLDER_TEXT)).check(matches(isDisplayed()));
+  }
+
+  @Test
+  public void testSetPlaceholderTextViaAttribute() {
+    // The text input with id textinput_box_outline has the string textinput_placeholder set on it
+    // via the placeholder text attribute. Check that the placeholder text is displayed via the
+    // attribute.
+    String placeholderText =
+        activityTestRule.getActivity().getResources().getString(R.string.textinput_placeholder);
+
+    // Click on the EditText so that the hint collapses and the placeholder text is shown.
+    onView(withId(R.id.textinput_edittext_outline)).perform(click());
+
+    // Check that the placeholder text is displayed.
+    onView(withText(placeholderText)).check(matches(isDisplayed()));
+  }
+
+  @Test
+  public void testSetErrorNullDoesNotHideHelperText() {
+    // Show helper text in layout with error enabled
+    onView(withId(R.id.textinput)).perform(setHelperText(HELPER_MESSAGE_1));
+
+    // Set error to null
+    onView(withId(R.id.textinput)).perform(setError(null));
+
+    // Check helper text is still visible
+    onView(withText(HELPER_MESSAGE_1)).check(matches(isDisplayed()));
+  }
+
+  @Test
   public void testSetEnabledFalse() {
     // First click on the EditText, so that it is focused and the hint collapses...
     onView(withId(R.id.textinput_edittext)).perform(click());
@@ -419,6 +462,23 @@ public class TextInputLayoutTest {
   }
 
   @Test
+  public void testSetErrorContentDescription() {
+    String errorContentDesc = "Error content description";
+    // Set error and error content description.
+    onView(withId(R.id.textinput))
+        .perform(setErrorEnabled(true))
+        .perform(setError(ERROR_MESSAGE_1))
+        .perform(setErrorContentDescription(errorContentDesc));
+
+    final Activity activity = activityTestRule.getActivity();
+    final TextInputLayout textInputLayout =
+        activity.findViewById(R.id.textinput);
+
+    // Assert the error content description is as expected.
+    assertEquals(errorContentDesc, textInputLayout.getErrorContentDescription().toString());
+  }
+
+  @Test
   public void testSetTypefaceUpdatesErrorView() {
     onView(withId(R.id.textinput))
         .perform(setErrorEnabled(true))
@@ -499,6 +559,30 @@ public class TextInputLayoutTest {
     // Check that the hint's collapsed height is the same as the TextPaint's height, measured from
     // the baseline (-ascent).
     assertEquals(layout.getHintCollapsedTextHeight(), -textPaint.ascent(), 0.01);
+  }
+
+  @Test
+  public void testSetBoxStrokeWidth() {
+    final Activity activity = activityTestRule.getActivity();
+    final TextInputLayout layout = activity.findViewById(R.id.textinput_box_outline);
+
+    // Set stroke width
+    onView(withId(R.id.textinput_box_outline)).perform(setBoxStrokeWidth(10));
+
+    // Assert stroke width is correct
+    assertEquals(10, layout.getBoxStrokeWidth());
+  }
+
+  @Test
+  public void testSetBoxStrokeFocusedWidth() {
+    final Activity activity = activityTestRule.getActivity();
+    final TextInputLayout layout = activity.findViewById(R.id.textinput_box_outline);
+
+    // Set stroke width
+    onView(withId(R.id.textinput_box_outline)).perform(setBoxStrokeWidthFocused(10));
+
+    // Assert stroke width is correct
+    assertEquals(10, layout.getBoxStrokeWidthFocused());
   }
 
   @Test

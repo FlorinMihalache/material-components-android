@@ -17,6 +17,8 @@ package com.google.android.material.datepicker;
 
 import com.google.android.material.R;
 
+import static java.lang.Math.min;
+
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
@@ -35,7 +37,7 @@ import java.util.Calendar;
 
 final class MaterialCalendarGridView extends GridView {
 
-  private final Calendar dayCompute = UtcDates.getCalendar();
+  private final Calendar dayCompute = UtcDates.getUtcCalendar();
 
   public MaterialCalendarGridView(Context context) {
     this(context, null);
@@ -151,7 +153,7 @@ final class MaterialCalendarGridView extends GridView {
       int lastHighlightPosition;
       int rangeHighlightEnd;
       if (endItem > lastOfMonth) {
-        lastHighlightPosition = monthAdapter.lastPositionInMonth();
+        lastHighlightPosition = min(monthAdapter.lastPositionInMonth(), getChildCount() - 1);
         rangeHighlightEnd =
             monthAdapter.isLastInRow(lastHighlightPosition)
                 ? getWidth()

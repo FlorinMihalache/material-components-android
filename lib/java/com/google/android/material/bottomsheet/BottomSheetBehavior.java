@@ -16,8 +16,6 @@
 
 package com.google.android.material.bottomsheet;
 
-import com.google.android.material.R;
-
 import static androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP;
 
 import android.animation.ValueAnimator;
@@ -30,19 +28,6 @@ import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import android.os.Parcel;
 import android.os.Parcelable;
-import androidx.annotation.FloatRange;
-import androidx.annotation.IntDef;
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.RestrictTo;
-import androidx.annotation.VisibleForTesting;
-import androidx.core.math.MathUtils;
-import androidx.customview.view.AbsSavedState;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
-import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
-import androidx.core.view.accessibility.AccessibilityViewCommand;
-import androidx.customview.widget.ViewDragHelper;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.util.TypedValue;
@@ -52,8 +37,25 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import androidx.annotation.FloatRange;
+import androidx.annotation.IntDef;
+import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
+import androidx.annotation.VisibleForTesting;
 import androidx.coordinatorlayout.widget.CoordinatorLayout;
 import androidx.coordinatorlayout.widget.CoordinatorLayout.LayoutParams;
+import androidx.core.math.MathUtils;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
+import androidx.core.view.accessibility.AccessibilityViewCommand;
+import androidx.customview.view.AbsSavedState;
+import androidx.customview.widget.ViewDragHelper;
+import com.google.android.material.R;
+import com.google.android.material.internal.ViewUtils;
+import com.google.android.material.internal.ViewUtils.RelativePadding;
 import com.google.android.material.resources.MaterialResources;
 import com.google.android.material.shape.MaterialShapeDrawable;
 import com.google.android.material.shape.ShapeAppearanceModel;
@@ -206,10 +208,15 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
 
   private MaterialShapeDrawable materialShapeDrawable;
 
+  private int gestureInsetBottom;
+  private boolean gestureInsetBottomIgnored;
+
   /** Default Shape Appearance to be used in bottomsheet */
   private ShapeAppearanceModel shapeAppearanceModelDefault;
 
   private boolean isShapeExpanded;
+
+  private SettleRunnable settleRunnable = null;
 
   @Nullable private ValueAnimator interpolatorAnimator;
 
@@ -230,6 +237,8 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
   boolean hideable;
 
   private boolean skipCollapsed;
+
+  private boolean draggable = true;
 
   @State int state = STATE_COLLAPSED;
 
@@ -290,14 +299,25 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
               R.styleable.BottomSheetBehavior_Layout_behavior_peekHeight, PEEK_HEIGHT_AUTO));
     }
     setHideable(a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_hideable, false));
+    setGestureInsetBottomIgnored(
+        a.getBoolean(R.styleable.BottomSheetBehavior_Layout_gestureInsetBottomIgnored, false));
     setFitToContents(
         a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_fitToContents, true));
     setSkipCollapsed(
         a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_skipCollapsed, false));
+    setDraggable(a.getBoolean(R.styleable.BottomSheetBehavior_Layout_behavior_draggable, true));
     setSaveFlags(a.getInt(R.styleable.BottomSheetBehavior_Layout_behavior_saveFlags, SAVE_NONE));
     setHalfExpandedRatio(
         a.getFloat(R.styleable.BottomSheetBehavior_Layout_behavior_halfExpandedRatio, 0.5f));
-    setExpandedOffset(a.getInt(R.styleable.BottomSheetBehavior_Layout_behavior_expandedOffset, 0));
+
+    value = a.peekValue(R.styleable.BottomSheetBehavior_Layout_behavior_expandedOffset);
+    if (value != null && value.type == TypedValue.TYPE_FIRST_INT) {
+      setExpandedOffset(value.data);
+    } else {
+      setExpandedOffset(
+          a.getDimensionPixelOffset(
+              R.styleable.BottomSheetBehavior_Layout_behavior_expandedOffset, 0));
+    }
     a.recycle();
     ViewConfiguration configuration = ViewConfiguration.get(context);
     maximumVelocity = configuration.getScaledMaximumFlingVelocity();
@@ -352,6 +372,7 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
       // First layout with this behavior.
       peekHeightMin =
           parent.getResources().getDimensionPixelSize(R.dimen.design_bottom_sheet_peek_height_min);
+      setSystemGestureInsets(child);
       viewRef = new WeakReference<>(child);
       // Only set MaterialShapeDrawable as background if shapeTheming is enabled, otherwise will
       // default to android:background declared in styles or layout.
@@ -406,7 +427,7 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
   @Override
   public boolean onInterceptTouchEvent(
       @NonNull CoordinatorLayout parent, @NonNull V child, @NonNull MotionEvent event) {
-    if (!child.isShown()) {
+    if (!child.isShown() || !draggable) {
       ignoreEvents = true;
       return false;
     }
@@ -535,6 +556,11 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
         ViewCompat.offsetTopAndBottom(child, -consumed[1]);
         setStateInternal(STATE_EXPANDED);
       } else {
+        if (!draggable) {
+          // Prevent dragging
+          return;
+        }
+
         consumed[1] = dy;
         ViewCompat.offsetTopAndBottom(child, -dy);
         setStateInternal(STATE_DRAGGING);
@@ -542,6 +568,11 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
     } else if (dy < 0) { // Downward
       if (!target.canScrollVertically(-1)) {
         if (newTop <= collapsedOffset || hideable) {
+          if (!draggable) {
+            // Prevent dragging
+            return;
+          }
+
           consumed[1] = dy;
           ViewCompat.offsetTopAndBottom(child, -dy);
           setStateInternal(STATE_DRAGGING);
@@ -575,8 +606,19 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
     int top;
     int targetState;
     if (lastNestedScrollDy > 0) {
-      top = getExpandedOffset();
-      targetState = STATE_EXPANDED;
+      if (fitToContents) {
+        top = fitToContentsOffset;
+        targetState = STATE_EXPANDED;
+      } else {
+        int currentTop = child.getTop();
+        if (currentTop > halfExpandedOffset) {
+          top = halfExpandedOffset;
+          targetState = STATE_HALF_EXPANDED;
+        } else {
+          top = expandedOffset;
+          targetState = STATE_EXPANDED;
+        }
+      }
     } else if (hideable && shouldHide(child, getYVelocity())) {
       top = parentHeight;
       targetState = STATE_HIDDEN;
@@ -728,7 +770,13 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
     }
     // If sheet is already laid out, recalculate the collapsed offset based on new setting.
     // Otherwise, let onLayoutChild handle this later.
-    if (layout && viewRef != null) {
+    if (layout) {
+      updatePeekHeight(animate);
+    }
+  }
+
+  private void updatePeekHeight(boolean animate) {
+    if (viewRef != null) {
       calculateCollapsedOffset();
       if (state == STATE_COLLAPSED) {
         V view = viewRef.get();
@@ -762,7 +810,7 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
    * it is increased. The default value is 0.5.
    *
    * @param ratio a float between 0 and 1, representing the {@link #STATE_HALF_EXPANDED} ratio.
-   * @attr
+   * @attr ref
    *     com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_halfExpandedRatio
    */
   public void setHalfExpandedRatio(@FloatRange(from = 0.0f, to = 1.0f) float ratio) {
@@ -779,13 +827,24 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
   }
 
   /**
+   * Gets the ratio for the height of the BottomSheet in the {@link #STATE_HALF_EXPANDED} state.
+   *
+   * @attr ref
+   *     com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_halfExpandedRatio
+   */
+  @FloatRange(from = 0.0f, to = 1.0f)
+  public float getHalfExpandedRatio() {
+    return halfExpandedRatio;
+  }
+
+  /**
    * Determines the top offset of the BottomSheet in the {@link #STATE_EXPANDED} state when
    * fitsToContent is false. The default value is 0, which results in the sheet matching the
    * parent's top.
    *
    * @param offset an integer value greater than equal to 0, representing the {@link
    *     #STATE_EXPANDED} offset. Value must not exceed the offset in the half expanded state.
-   * @attr
+   * @attr ref
    *     com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_expandedOffset
    */
   public void setExpandedOffset(int offset) {
@@ -796,14 +855,14 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
   }
 
   /**
-   * Gets the ratio for the height of the BottomSheet in the {@link #STATE_HALF_EXPANDED} state.
+   * Returns the current expanded offset. If {@code fitToContents} is true, it will automatically
+   * pick the offset depending on the height of the content.
    *
-   * @attr
-   *     com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_halfExpandedRatio
+   * @attr ref
+   *     com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_expandedOffset
    */
-  @FloatRange(from = 0.0f, to = 1.0f)
-  public float getHalfExpandedRatio() {
-    return halfExpandedRatio;
+  public int getExpandedOffset() {
+    return fitToContents ? fitToContentsOffset : expandedOffset;
   }
 
   /**
@@ -855,6 +914,21 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
    */
   public boolean getSkipCollapsed() {
     return skipCollapsed;
+  }
+
+  /**
+   * Sets whether this bottom sheet is can be collapsed/expanded by dragging. Note: When disabling
+   * dragging, an app will require to implement a custom way to expand/collapse the bottom sheet
+   *
+   * @param draggable {@code false} to prevent dragging the sheet to collapse and expand
+   * @attr ref com.google.android.material.R.styleable#BottomSheetBehavior_Layout_behavior_draggable
+   */
+  public void setDraggable(boolean draggable) {
+    this.draggable = draggable;
+  }
+
+  public boolean isDraggable() {
+    return draggable;
   }
 
   /**
@@ -945,6 +1019,26 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
     settleToStatePendingLayout(state);
   }
 
+  /**
+   * Sets whether this bottom sheet should adjust it's position based on the system gesture area on
+   * Android Q and above.
+   *
+   * <p>Note: the bottom sheet will only adjust it's position if it would be unable to be scrolled
+   * upwards because the peekHeight is less than the gesture inset margins,(because that would cause
+   * a gesture conflict), gesture navigation is enabled, and this {@code ignoreGestureInsetBottom}
+   * flag is false.
+   */
+  public void setGestureInsetBottomIgnored(boolean gestureInsetBottomIgnored) {
+    this.gestureInsetBottomIgnored = gestureInsetBottomIgnored;
+  }
+
+  /**
+   * Returns whether this bottom sheet should adjust it's position based on the system gesture area.
+   */
+  public boolean isGestureInsetBottomIgnored() {
+    return gestureInsetBottomIgnored;
+  }
+
   private void settleToStatePendingLayout(@State int state) {
     final V child = viewRef.get();
     if (child == null) {
@@ -1031,7 +1125,7 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
     if (peekHeightAuto) {
       return Math.max(peekHeightMin, parentHeight - parentWidth * 9 / 16);
     }
-    return peekHeight;
+    return peekHeight + (gestureInsetBottomIgnored ? 0 : gestureInsetBottom);
   }
 
   private void calculateCollapsedOffset() {
@@ -1151,16 +1245,32 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
         });
   }
 
+  /**
+   * Ensure the peek height is at least as large as the bottom gesture inset size so that the sheet
+   * can always be dragged, but only when the inset is required by the system.
+   */
+  private void setSystemGestureInsets(@NonNull View child) {
+    if (VERSION.SDK_INT >= VERSION_CODES.Q && !isGestureInsetBottomIgnored() && !peekHeightAuto) {
+      ViewUtils.doOnApplyWindowInsets(
+          child,
+          new ViewUtils.OnApplyWindowInsetsListener() {
+            @Override
+            public WindowInsetsCompat onApplyWindowInsets(
+                View view, WindowInsetsCompat insets, RelativePadding initialPadding) {
+              gestureInsetBottom = insets.getMandatorySystemGestureInsets().bottom;
+              updatePeekHeight(/* animate= */ false);
+              return insets;
+            }
+          });
+    }
+  }
+
   private float getYVelocity() {
     if (velocityTracker == null) {
       return 0;
     }
     velocityTracker.computeCurrentVelocity(1000, maximumVelocity);
     return velocityTracker.getYVelocity(activePointerId);
-  }
-
-  private int getExpandedOffset() {
-    return fitToContents ? fitToContentsOffset : expandedOffset;
   }
 
   void settleToState(@NonNull View child, int state) {
@@ -1193,7 +1303,19 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
       setStateInternal(STATE_SETTLING);
       // STATE_SETTLING won't animate the material shape, so do that here with the target state.
       updateDrawableForTargetState(state);
-      ViewCompat.postOnAnimation(child, new SettleRunnable(child, state));
+      if (settleRunnable == null) {
+        // If the singleton SettleRunnable instance has not been instantiated, create it.
+        settleRunnable = new SettleRunnable(child, state);
+      }
+      // If the SettleRunnable has not been posted, post it with the correct state.
+      if (settleRunnable.isPosted == false) {
+        settleRunnable.targetState = state;
+        ViewCompat.postOnAnimation(child, settleRunnable);
+        settleRunnable.isPosted = true;
+      } else {
+        // Otherwise, if it has been posted, just update the target state.
+        settleRunnable.targetState = state;
+      }
     } else {
       setStateInternal(state);
     }
@@ -1228,7 +1350,7 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
 
         @Override
         public void onViewDragStateChanged(int state) {
-          if (state == ViewDragHelper.STATE_DRAGGING) {
+          if (state == ViewDragHelper.STATE_DRAGGING && draggable) {
             setStateInternal(STATE_DRAGGING);
           }
         }
@@ -1384,7 +1506,9 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
 
     private final View view;
 
-    @State private final int targetState;
+    private boolean isPosted;
+
+    @State int targetState;
 
     SettleRunnable(View view, @State int targetState) {
       this.view = view;
@@ -1396,10 +1520,9 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
       if (viewDragHelper != null && viewDragHelper.continueSettling(true)) {
         ViewCompat.postOnAnimation(view, this);
       } else {
-        if (state == STATE_SETTLING) {
-          setStateInternal(targetState);
-        }
+        setStateInternal(targetState);
       }
+      this.isPosted = false;
     }
   }
 
@@ -1440,7 +1563,7 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
      * BottomSheetBehavior#SAVE_SKIP_COLLAPSED}. It is as if {@link BottomSheetBehavior#SAVE_NONE}
      * were set.
      *
-     * @deprecated Use {@link SavedState(Parcelable, BottomSheetBehavior)} instead.
+     * @deprecated Use {@link #SavedState(Parcelable, BottomSheetBehavior)} instead.
      */
     @Deprecated
     public SavedState(Parcelable superstate, int state) {
@@ -1502,7 +1625,7 @@ public class BottomSheetBehavior<V extends View> extends CoordinatorLayout.Behav
   }
 
   /**
-   * Sets whether the BottomSheet should update the accessibility status of its {@link *
+   * Sets whether the BottomSheet should update the accessibility status of its {@link
    * CoordinatorLayout} siblings when expanded.
    *
    * <p>Set this to true if the expanded state of the sheet blocks access to siblings (e.g., when

@@ -9,8 +9,6 @@ path: /catalog/badging/
 
 # BadgeDrawable
 
-
-
 Badge                                   | Badge with number                              | Badge with a maximum character count
 --------------------------------------- | ---------------------------------------------- | ------------------------------------
 ![badge_icon](assets/IconOnlyBadge.png) | ![badge_with_number_8](assets/BadgeNumber.png) | ![badge_with_999+](assets/BadgeNumberLongerThanMaxCharCount.png)
@@ -20,7 +18,7 @@ range of customization Material Android components generally support (e.g.
 themed attributes).
 
 A `BadgeDrawable` represents dynamic information such as a number of pending
-requests in a [`BottomNavigationView`](BottomNavigationView.md) or
+requests in a [`BottomNavigationView`](BottomNavigation.md) or
 [`TabLayout`](TabLayout.md).
 
 ## Design & API Documentation

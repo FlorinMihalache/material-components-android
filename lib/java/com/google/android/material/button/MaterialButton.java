@@ -30,6 +30,8 @@ import android.graphics.PorterDuff.Mode;
 import android.graphics.drawable.Drawable;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
+import android.os.Parcel;
+import android.os.Parcelable;
 import androidx.annotation.ColorInt;
 import androidx.annotation.ColorRes;
 import androidx.annotation.DimenRes;
@@ -41,6 +43,7 @@ import androidx.annotation.Px;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.RestrictTo;
 import androidx.core.graphics.drawable.DrawableCompat;
+import androidx.customview.view.AbsSavedState;
 import androidx.core.view.ViewCompat;
 import androidx.core.widget.TextViewCompat;
 import androidx.appcompat.content.res.AppCompatResources;
@@ -247,6 +250,26 @@ public class MaterialButton extends AppCompatButton implements Checkable, Shapea
     accessibilityEvent.setChecked(isChecked());
   }
 
+  @NonNull
+  @Override
+  public Parcelable onSaveInstanceState() {
+    Parcelable superState = super.onSaveInstanceState();
+    SavedState savedState = new SavedState(superState);
+    savedState.checked = checked;
+    return savedState;
+  }
+
+  @Override
+  public void onRestoreInstanceState(@Nullable Parcelable state) {
+    if (!(state instanceof SavedState)) {
+      super.onRestoreInstanceState(state);
+      return;
+    }
+    SavedState savedState = (SavedState) state;
+    super.onRestoreInstanceState(savedState.getSuperState());
+    setChecked(savedState.checked);
+  }
+
   /**
    * This should be accessed via {@link
    * androidx.core.view.ViewCompat#setBackgroundTintList(android.view.View, ColorStateList)}
@@ -414,8 +437,10 @@ public class MaterialButton extends AppCompatButton implements Checkable, Shapea
   protected void onAttachedToWindow() {
     super.onAttachedToWindow();
 
-    MaterialShapeUtils.setParentAbsoluteElevation(
-        this, materialButtonHelper.getMaterialShapeDrawable());
+    if (isUsingOriginalBackground()) {
+      MaterialShapeUtils.setParentAbsoluteElevation(
+          this, materialButtonHelper.getMaterialShapeDrawable());
+    }
   }
 
   @RequiresApi(VERSION_CODES.LOLLIPOP)
@@ -1048,5 +1073,53 @@ public class MaterialButton extends AppCompatButton implements Checkable, Shapea
     if (isUsingOriginalBackground()) {
       materialButtonHelper.setShouldDrawSurfaceColorStroke(shouldDrawSurfaceColorStroke);
     }
+  }
+
+  static class SavedState extends AbsSavedState {
+
+    boolean checked;
+
+    public SavedState(Parcelable superState) {
+      super(superState);
+    }
+
+    public SavedState(@NonNull Parcel source, ClassLoader loader) {
+      super(source, loader);
+      if (loader == null) {
+        loader = getClass().getClassLoader();
+      }
+      readFromParcel(source);
+    }
+
+    @Override
+    public void writeToParcel(@NonNull Parcel out, int flags) {
+      super.writeToParcel(out, flags);
+      out.writeInt(checked ? 1 : 0);
+    }
+
+    private void readFromParcel(@NonNull Parcel in) {
+      checked = in.readInt() == 1;
+    }
+
+    public static final Creator<SavedState> CREATOR =
+        new ClassLoaderCreator<SavedState>() {
+          @NonNull
+          @Override
+          public SavedState createFromParcel(@NonNull Parcel in, ClassLoader loader) {
+            return new SavedState(in, loader);
+          }
+
+          @NonNull
+          @Override
+          public SavedState createFromParcel(@NonNull Parcel in) {
+            return new SavedState(in, null);
+          }
+
+          @NonNull
+          @Override
+          public SavedState[] newArray(int size) {
+            return new SavedState[size];
+          }
+        };
   }
 }

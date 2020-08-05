@@ -18,6 +18,8 @@ package com.google.android.material.chip;
 
 import com.google.android.material.R;
 
+import static com.google.android.material.theme.overlay.MaterialThemeOverlay.wrap;
+
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.drawable.Drawable;
@@ -29,15 +31,18 @@ import androidx.annotation.Dimension;
 import androidx.annotation.IdRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionInfoCompat;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.CompoundButton;
 import com.google.android.material.internal.FlowLayout;
 import com.google.android.material.internal.ThemeEnforcement;
 import java.util.ArrayList;
 import java.util.List;
-
 
 /**
  * A ChipGroup is used to hold multiple {@link Chip}s. By default, the chips are reflowed across
@@ -85,9 +90,12 @@ public class ChipGroup extends FlowLayout {
     }
   }
 
+  private static final int DEF_STYLE_RES = R.style.Widget_MaterialComponents_ChipGroup;
+
   @Dimension private int chipSpacingHorizontal;
   @Dimension private int chipSpacingVertical;
   private boolean singleSelection;
+  private boolean selectionRequired;
 
   @Nullable private OnCheckedChangeListener onCheckedChangeListener;
 
@@ -109,7 +117,9 @@ public class ChipGroup extends FlowLayout {
   }
 
   public ChipGroup(Context context, AttributeSet attrs, int defStyleAttr) {
-    super(context, attrs, defStyleAttr);
+    super(wrap(context, attrs, defStyleAttr, DEF_STYLE_RES), attrs, defStyleAttr);
+    // Ensure we are using the correctly themed context rather than the context that was passed in.
+    context = getContext();
 
     TypedArray a =
         ThemeEnforcement.obtainStyledAttributes(
@@ -117,7 +127,7 @@ public class ChipGroup extends FlowLayout {
             attrs,
             R.styleable.ChipGroup,
             defStyleAttr,
-            R.style.Widget_MaterialComponents_ChipGroup);
+            DEF_STYLE_RES);
 
     int chipSpacing = a.getDimensionPixelOffset(R.styleable.ChipGroup_chipSpacing, 0);
     setChipSpacingHorizontal(
@@ -126,6 +136,7 @@ public class ChipGroup extends FlowLayout {
         a.getDimensionPixelOffset(R.styleable.ChipGroup_chipSpacingVertical, chipSpacing));
     setSingleLine(a.getBoolean(R.styleable.ChipGroup_singleLine, false));
     setSingleSelection(a.getBoolean(R.styleable.ChipGroup_singleSelection, false));
+    setSelectionRequired(a.getBoolean(R.styleable.ChipGroup_selectionRequired, false));
     int checkedChip = a.getResourceId(R.styleable.ChipGroup_checkedChip, View.NO_ID);
     if (checkedChip != View.NO_ID) {
       checkedId = checkedChip;
@@ -133,6 +144,24 @@ public class ChipGroup extends FlowLayout {
 
     a.recycle();
     super.setOnHierarchyChangeListener(passThroughListener);
+
+    ViewCompat.setImportantForAccessibility(this, ViewCompat.IMPORTANT_FOR_ACCESSIBILITY_YES);
+  }
+
+  @Override
+  public void onInitializeAccessibilityNodeInfo(@NonNull AccessibilityNodeInfo info) {
+    super.onInitializeAccessibilityNodeInfo(info);
+    AccessibilityNodeInfoCompat infoCompat = AccessibilityNodeInfoCompat.wrap(info);
+    // -1 for an unknown number of columns in a reflowing layout
+    int columnCount = isSingleLine() ? getChipCount() : -1;
+    infoCompat.setCollectionInfo(
+        CollectionInfoCompat.obtain(
+            /* rowCount= */ getRowCount(),
+            /* columnCount= */ columnCount,
+            /* hierarchical= */ false,
+            /* selectionMode = */ isSingleSelection()
+                ? CollectionInfoCompat.SELECTION_MODE_SINGLE
+                : CollectionInfoCompat.SELECTION_MODE_MULTIPLE));
   }
 
   @NonNull
@@ -190,7 +219,7 @@ public class ChipGroup extends FlowLayout {
     super.addView(child, index, params);
   }
 
-  /** Deprecated. Use {@link ChipGroup#setChipSpacingHorizontal(int)} instead. */
+  /** @deprecated Use {@link ChipGroup#setChipSpacingHorizontal(int)} instead. */
   @Deprecated
   public void setDividerDrawableHorizontal(Drawable divider) {
     throw new UnsupportedOperationException(
@@ -198,7 +227,7 @@ public class ChipGroup extends FlowLayout {
             + "spacing.");
   }
 
-  /** Deprecated. Use {@link ChipGroup#setChipSpacingVertical(int)} instead. */
+  /** @deprecated Use {@link ChipGroup#setChipSpacingVertical(int)} instead. */
   @Deprecated
   public void setDividerDrawableVertical(@Nullable Drawable divider) {
     throw new UnsupportedOperationException(
@@ -206,21 +235,21 @@ public class ChipGroup extends FlowLayout {
             + "spacing.");
   }
 
-  /** Deprecated. Use {@link ChipGroup#setChipSpacingHorizontal(int)} instead. */
+  /** @deprecated Use {@link ChipGroup#setChipSpacingHorizontal(int)} instead. */
   @Deprecated
   public void setShowDividerHorizontal(int dividerMode) {
     throw new UnsupportedOperationException(
         "Changing divider modes has no effect. ChipGroup do not use divider drawables as spacing.");
   }
 
-  /** Deprecated. Use {@link ChipGroup#setChipSpacingVertical(int)} instead. */
+  /** @deprecated Use {@link ChipGroup#setChipSpacingVertical(int)} instead. */
   @Deprecated
   public void setShowDividerVertical(int dividerMode) {
     throw new UnsupportedOperationException(
         "Changing divider modes has no effect. ChipGroup do not use divider drawables as spacing.");
   }
 
-  /** Deprecated Use {@link ChipGroup#setSingleLine(int)} instead. */
+  /** @deprecated Use {@link ChipGroup#setSingleLine(int)} instead. */
   @Deprecated
   public void setFlexWrap(int flexWrap) {
     throw new UnsupportedOperationException(
@@ -329,9 +358,13 @@ public class ChipGroup extends FlowLayout {
   }
 
   private void setCheckedId(int checkedId) {
+    setCheckedId(checkedId, true);
+  }
+
+  private void setCheckedId(int checkedId, boolean fromUser) {
     this.checkedId = checkedId;
 
-    if (onCheckedChangeListener != null && singleSelection) {
+    if (onCheckedChangeListener != null && singleSelection && fromUser) {
       onCheckedChangeListener.onCheckedChanged(this, checkedId);
     }
   }
@@ -343,6 +376,38 @@ public class ChipGroup extends FlowLayout {
       ((Chip) checkedView).setChecked(checked);
       protectFromCheckedChange = false;
     }
+  }
+
+  private int getChipCount() {
+    int count = 0;
+    for (int i = 0; i < getChildCount(); i++) {
+      if (this.getChildAt(i) instanceof Chip) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Returns the index of the Chip within the Chip children.
+   *
+   * <p>Non-Chip children are ignored when computing the index.
+   */
+  int getIndexOfChip(@Nullable View child) {
+    if (!(child instanceof Chip)) {
+      return -1;
+    }
+    int index = 0;
+    for (int i = 0; i < getChildCount(); i++) {
+      if (this.getChildAt(i) instanceof Chip) {
+        Chip chip = (Chip) getChildAt(i);
+        if (chip == child) {
+          return index;
+        }
+        index++;
+      }
+    }
+    return -1;
   }
 
   /** Sets the horizontal and vertical spacing between visible chips in this group. */
@@ -442,11 +507,39 @@ public class ChipGroup extends FlowLayout {
     setSingleSelection(getResources().getBoolean(id));
   }
 
+  /**
+   * Sets whether we prevent all child chips from being deselected.
+   *
+   * @attr ref R.styleable#ChipGroup_selectionRequired
+   * @see #setSingleSelection(boolean)
+   */
+  public void setSelectionRequired(boolean selectionRequired) {
+    this.selectionRequired = selectionRequired;
+  }
+
+  /**
+   * Returns whether we prevent all child chips from being deselected.
+   *
+   * @attr ref R.styleable#ChipGroup_selectionRequired
+   * @see #setSingleSelection(boolean)
+   * @see #setSelectionRequired(boolean)
+   */
+  public boolean isSelectionRequired() {
+    return selectionRequired;
+  }
+
   private class CheckedStateTracker implements CompoundButton.OnCheckedChangeListener {
     @Override
     public void onCheckedChanged(@NonNull CompoundButton buttonView, boolean isChecked) {
       // prevents from infinite recursion
       if (protectFromCheckedChange) {
+        return;
+      }
+
+      List<Integer> checkedChipIds = getCheckedChipIds();
+      if (checkedChipIds.isEmpty() && selectionRequired) {
+        setCheckedStateForView(buttonView.getId(), true);
+        setCheckedId(buttonView.getId(), false);
         return;
       }
 
@@ -457,10 +550,8 @@ public class ChipGroup extends FlowLayout {
           setCheckedStateForView(checkedId, false);
         }
         setCheckedId(id);
-      } else {
-        if (checkedId == id) {
-          setCheckedId(View.NO_ID);
-        }
+      } else if (checkedId == id) {
+        setCheckedId(View.NO_ID);
       }
     }
   }

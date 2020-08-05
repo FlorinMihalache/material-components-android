@@ -32,6 +32,9 @@ import androidx.core.content.ContextCompat;
 import androidx.core.graphics.drawable.DrawableCompat;
 import androidx.core.view.PointerIconCompat;
 import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionItemInfoCompat;
 import androidx.core.widget.TextViewCompat;
 import androidx.appcompat.view.menu.MenuItemImpl;
 import androidx.appcompat.view.menu.MenuView;
@@ -124,7 +127,6 @@ public class BottomNavigationItemView extends FrameLayout implements MenuView.It
             }
           });
     }
-    ViewCompat.setAccessibilityDelegate(this, null);
   }
 
   @Override
@@ -285,6 +287,20 @@ public class BottomNavigationItemView extends FrameLayout implements MenuView.It
       info.setContentDescription(
           customContentDescription + ", " + badgeDrawable.getContentDescription());
     }
+    AccessibilityNodeInfoCompat infoCompat = AccessibilityNodeInfoCompat.wrap(info);
+    infoCompat.setCollectionItemInfo(
+        CollectionItemInfoCompat.obtain(
+            /* rowIndex= */ 0,
+            /* rowSpan= */ 1,
+            /* columnIndex= */ getItemPosition(),
+            /* columnSpan= */ 1,
+            /* heading= */ false,
+            /* selected= */ isSelected()));
+    if (isSelected()) {
+      infoCompat.setClickable(false);
+      infoCompat.removeAction(AccessibilityActionCompat.ACTION_CLICK);
+    }
+    infoCompat.setRoleDescription(getResources().getString(R.string.item_view_role_description));
   }
 
   private void setViewLayoutParams(@NonNull View view, int topMargin, int gravity) {

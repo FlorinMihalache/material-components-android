@@ -141,7 +141,7 @@ class MaterialCardViewHelper {
     setShapeAppearanceModel(shapeAppearanceModelBuilder.build());
 
     Resources resources = card.getResources();
-    // TODO: support custom sizing
+    // TODO(b/145298914): support custom sizing
     checkedIconMargin = resources.getDimensionPixelSize(R.dimen.mtrl_card_checked_icon_margin);
     checkedIconSize = resources.getDimensionPixelSize(R.dimen.mtrl_card_checked_icon_size);
 
@@ -181,8 +181,7 @@ class MaterialCardViewHelper {
             attributes,
             R.styleable.MaterialCardView_cardForegroundColor);
 
-    foregroundContentDrawable.setFillColor(
-        foregroundColor == null ? ColorStateList.valueOf(Color.TRANSPARENT) : foregroundColor);
+    setCardForegroundColor(foregroundColor);
 
     updateRippleColor();
     updateElevation();
@@ -245,6 +244,15 @@ class MaterialCardViewHelper {
 
   ColorStateList getCardBackgroundColor() {
     return bgDrawable.getFillColor();
+  }
+
+  void setCardForegroundColor(@Nullable ColorStateList foregroundColor) {
+    foregroundContentDrawable.setFillColor(
+        foregroundColor == null ? ColorStateList.valueOf(Color.TRANSPARENT) : foregroundColor);
+  }
+
+  ColorStateList getCardForegroundColor() {
+    return foregroundContentDrawable.getFillColor();
   }
 
   void setUserContentPadding(int left, int top, int right, int bottom) {
@@ -393,6 +401,12 @@ class MaterialCardViewHelper {
     if (clickableForegroundDrawable != null) {
       int left = measuredWidth - checkedIconMargin - checkedIconSize;
       int bottom = measuredHeight - checkedIconMargin - checkedIconSize;
+      boolean isPreLollipop = VERSION.SDK_INT < VERSION_CODES.LOLLIPOP;
+      if (isPreLollipop || materialCardView.getUseCompatPadding()) {
+        bottom -= (int) Math.ceil(2f * calculateVerticalBackgroundPadding());
+        left -= (int) Math.ceil(2f * calculateHorizontalBackgroundPadding());
+      }
+
       int right = checkedIconMargin;
       if (ViewCompat.getLayoutDirection(materialCardView) == ViewCompat.LAYOUT_DIRECTION_RTL) {
         // swap left and right
@@ -422,6 +436,7 @@ class MaterialCardViewHelper {
   void setShapeAppearanceModel(@NonNull ShapeAppearanceModel shapeAppearanceModel) {
     this.shapeAppearanceModel = shapeAppearanceModel;
     bgDrawable.setShapeAppearanceModel(shapeAppearanceModel);
+    bgDrawable.setShadowBitmapDrawingEnable(!bgDrawable.isRoundRect());
     if (foregroundContentDrawable != null) {
       foregroundContentDrawable.setShapeAppearanceModel(shapeAppearanceModel);
     }

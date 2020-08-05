@@ -18,6 +18,8 @@ package com.google.android.material.datepicker;
 
 import com.google.android.material.R;
 
+import static androidx.annotation.RestrictTo.Scope.LIBRARY_GROUP;
+
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -29,8 +31,10 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.InsetDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Bundle;
+import androidx.annotation.IntDef;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RestrictTo;
 import androidx.annotation.StringRes;
 import androidx.annotation.StyleRes;
 import androidx.fragment.app.DialogFragment;
@@ -50,6 +54,8 @@ import com.google.android.material.dialog.InsetDialogOnTouchListener;
 import com.google.android.material.internal.CheckableImageButton;
 import com.google.android.material.resources.MaterialAttributes;
 import com.google.android.material.shape.MaterialShapeDrawable;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.LinkedHashSet;
 
 /** A {@link Dialog} with a header, {@link MaterialCalendar}, and set of actions. */
@@ -60,14 +66,34 @@ public final class MaterialDatePicker<S> extends DialogFragment {
   private static final String CALENDAR_CONSTRAINTS_KEY = "CALENDAR_CONSTRAINTS_KEY";
   private static final String TITLE_TEXT_RES_ID_KEY = "TITLE_TEXT_RES_ID_KEY";
   private static final String TITLE_TEXT_KEY = "TITLE_TEXT_KEY";
+  private static final String INPUT_MODE_KEY = "INPUT_MODE_KEY";
 
   static final Object CONFIRM_BUTTON_TAG = "CONFIRM_BUTTON_TAG";
   static final Object CANCEL_BUTTON_TAG = "CANCEL_BUTTON_TAG";
   static final Object TOGGLE_BUTTON_TAG = "TOGGLE_BUTTON_TAG";
 
-  /** Returns a value of UTC milliseconds representing today for the device's current timezone. */
+  /** Date picker will start with calendar view. */
+  public static final int INPUT_MODE_CALENDAR = 0;
+
+  /** Date picker will start with input text view. */
+  public static final int INPUT_MODE_TEXT = 1;
+
+  /** @hide */
+  @RestrictTo(LIBRARY_GROUP)
+  @IntDef(value = {INPUT_MODE_CALENDAR, INPUT_MODE_TEXT})
+  @Retention(RetentionPolicy.SOURCE)
+  public @interface InputMode {}
+
+  /** Returns the UTC milliseconds representing the first moment of today in local timezone. */
   public static long todayInUtcMilliseconds() {
-    return Month.today().timeInMillis;
+    return UtcDates.getTodayCalendar().getTimeInMillis();
+  }
+
+  /**
+   * Returns the UTC milliseconds representing the first moment in current month in local timezone.
+   */
+  public static long thisMonthInUtcMilliseconds() {
+    return Month.current().timeInMillis;
   }
 
   /**
@@ -96,6 +122,7 @@ public final class MaterialDatePicker<S> extends DialogFragment {
   @StringRes private int titleTextResId;
   private CharSequence titleText;
   private boolean fullscreen;
+  @InputMode private int inputMode;
 
   private TextView headerSelectionText;
   private CheckableImageButton headerToggleButton;
@@ -111,6 +138,7 @@ public final class MaterialDatePicker<S> extends DialogFragment {
     args.putParcelable(CALENDAR_CONSTRAINTS_KEY, options.calendarConstraints);
     args.putInt(TITLE_TEXT_RES_ID_KEY, options.titleTextResId);
     args.putCharSequence(TITLE_TEXT_KEY, options.titleText);
+    args.putInt(INPUT_MODE_KEY, options.inputMode);
     materialDatePickerDialogFragment.setArguments(args);
     return materialDatePickerDialogFragment;
   }
@@ -140,6 +168,7 @@ public final class MaterialDatePicker<S> extends DialogFragment {
     calendarConstraints = activeBundle.getParcelable(CALENDAR_CONSTRAINTS_KEY);
     titleTextResId = activeBundle.getInt(TITLE_TEXT_RES_ID_KEY);
     titleText = activeBundle.getCharSequence(TITLE_TEXT_KEY);
+    inputMode = activeBundle.getInt(INPUT_MODE_KEY);
   }
 
   private int getThemeResId(Context context) {
@@ -157,7 +186,7 @@ public final class MaterialDatePicker<S> extends DialogFragment {
     fullscreen = isFullscreen(context);
     int surfaceColor =
         MaterialAttributes.resolveOrThrow(
-            getContext(), R.attr.colorSurface, MaterialDatePicker.class.getCanonicalName());
+            context, R.attr.colorSurface, MaterialDatePicker.class.getCanonicalName());
     background =
         new MaterialShapeDrawable(
             context,
@@ -320,11 +349,12 @@ public final class MaterialDatePicker<S> extends DialogFragment {
           @Override
           public void onSelectionChanged(S selection) {
             updateHeader();
-            if (dateSelector.isSelectionComplete()) {
-              confirmButton.setEnabled(true);
-            } else {
-              confirmButton.setEnabled(false);
-            }
+            confirmButton.setEnabled(dateSelector.isSelectionComplete());
+          }
+
+          @Override
+          void onIncompleteSelectionChanged() {
+            confirmButton.setEnabled(false);
           }
         });
   }
@@ -332,6 +362,8 @@ public final class MaterialDatePicker<S> extends DialogFragment {
   private void initHeaderToggle(Context context) {
     headerToggleButton.setTag(TOGGLE_BUTTON_TAG);
     headerToggleButton.setImageDrawable(createHeaderToggleDrawable(context));
+    headerToggleButton.setChecked(inputMode != INPUT_MODE_CALENDAR);
+
     // By default, CheckableImageButton adds a delegate that reads checked state.
     // This information is not useful; we remove the delegate and use custom content descriptions.
     ViewCompat.setAccessibilityDelegate(headerToggleButton, null);
@@ -340,6 +372,9 @@ public final class MaterialDatePicker<S> extends DialogFragment {
         new OnClickListener() {
           @Override
           public void onClick(View v) {
+            // Update confirm button in case in progress selection has been reset
+            confirmButton.setEnabled(dateSelector.isSelectionComplete());
+
             headerToggleButton.toggle();
             updateToggleContentDescription(headerToggleButton);
             startPickerFragment();
@@ -361,9 +396,10 @@ public final class MaterialDatePicker<S> extends DialogFragment {
     StateListDrawable toggleDrawable = new StateListDrawable();
     toggleDrawable.addState(
         new int[] {android.R.attr.state_checked},
-        AppCompatResources.getDrawable(context, R.drawable.ic_calendar_black_24dp));
+        AppCompatResources.getDrawable(context, R.drawable.material_ic_calendar_black_24dp));
     toggleDrawable.addState(
-        new int[] {}, AppCompatResources.getDrawable(context, R.drawable.ic_edit_black_24dp));
+        new int[] {},
+        AppCompatResources.getDrawable(context, R.drawable.material_ic_edit_black_24dp));
     return toggleDrawable;
   }
 
@@ -398,7 +434,7 @@ public final class MaterialDatePicker<S> extends DialogFragment {
   private static int getPaddedPickerWidth(@NonNull Context context) {
     Resources resources = context.getResources();
     int padding = resources.getDimensionPixelOffset(R.dimen.mtrl_calendar_content_padding);
-    int daysInWeek = Month.today().daysInWeek;
+    int daysInWeek = Month.current().daysInWeek;
     int dayWidth = resources.getDimensionPixelSize(R.dimen.mtrl_calendar_day_width);
     int horizontalSpace =
         resources.getDimensionPixelOffset(R.dimen.mtrl_calendar_month_horizontal_padding);
@@ -497,14 +533,20 @@ public final class MaterialDatePicker<S> extends DialogFragment {
     int titleTextResId = 0;
     CharSequence titleText = null;
     @Nullable S selection = null;
+    @InputMode int inputMode = INPUT_MODE_CALENDAR;
 
     private Builder(DateSelector<S> dateSelector) {
       this.dateSelector = dateSelector;
     }
 
-    /** Sets the Builder's selection manager to the provided {@link DateSelector}. */
+    /**
+     * Sets the Builder's selection manager to the provided {@link DateSelector}.
+     *
+     * @hide
+     */
+    @RestrictTo(LIBRARY_GROUP)
     @NonNull
-    static <S> Builder<S> customDatePicker(DateSelector<S> dateSelector) {
+    public static <S> Builder<S> customDatePicker(@NonNull DateSelector<S> dateSelector) {
       return new Builder<>(dateSelector);
     }
 
@@ -539,7 +581,7 @@ public final class MaterialDatePicker<S> extends DialogFragment {
       return this;
     }
 
-    /** Sets the first, last, and starting {@link Month}. */
+    /** Sets the first, last, and starting month. */
     @NonNull
     public Builder<S> setCalendarConstraints(CalendarConstraints bounds) {
       this.calendarConstraints = bounds;
@@ -565,6 +607,13 @@ public final class MaterialDatePicker<S> extends DialogFragment {
     public Builder<S> setTitleText(@Nullable CharSequence charSequence) {
       this.titleText = charSequence;
       this.titleTextResId = 0;
+      return this;
+    }
+
+    /** Sets the input mode to start with. */
+    @NonNull
+    public Builder<S> setInputMode(@InputMode int inputMode) {
+      this.inputMode = inputMode;
       return this;
     }
 

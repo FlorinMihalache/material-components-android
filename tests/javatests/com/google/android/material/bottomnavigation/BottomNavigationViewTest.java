@@ -49,6 +49,12 @@ import android.os.Build;
 import android.os.Parcelable;
 import androidx.annotation.ColorInt;
 import androidx.core.content.res.ResourcesCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.AccessibilityActionCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionInfoCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat.CollectionItemInfoCompat;
+import android.util.SparseArray;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -63,10 +69,12 @@ import androidx.test.rule.ActivityTestRule;
 import androidx.test.runner.AndroidJUnit4;
 import com.google.android.material.testapp.BottomNavigationViewActivity;
 import com.google.android.material.testapp.R;
+import com.google.android.material.testutils.AccessibilityUtils;
 import com.google.android.material.testutils.TestDrawable;
 import com.google.android.material.testutils.TestUtilsMatchers;
 import java.util.HashMap;
 import java.util.Map;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -635,16 +643,22 @@ public class BottomNavigationViewTest {
     onView(withId(R.id.bottom_navigation))
         .perform(showBadgeNumberForMenuItem(R.id.destination_home, 75));
     assertTrue(bottomNavigation.getMenu().findItem(R.id.destination_profile).isChecked());
-    // Save the state
-    final Parcelable state = bottomNavigation.onSaveInstanceState();
+
+    // Save the current state
+    SparseArray<Parcelable> container = new SparseArray<>();
+    bottomNavigation.saveHierarchyState(container);
 
     // Restore the state into a fresh BottomNavigationView
     activityTestRule.runOnUiThread(
         () -> {
           BottomNavigationView testView = new BottomNavigationView(activityTestRule.getActivity());
+          testView.setId(R.id.bottom_navigation);
           testView.inflateMenu(R.menu.bottom_navigation_view_content);
-          testView.onRestoreInstanceState(state);
+          testView.restoreHierarchyState(container);
           assertTrue(testView.getMenu().findItem(R.id.destination_profile).isChecked());
+
+          assertTrue(testView.menuView.findItemView(R.id.destination_home).getBadge().isVisible());
+
           assertTrue(testView.getBadge(R.id.destination_home).isVisible());
           assertEquals(75, testView.getBadge(R.id.destination_home).getNumber());
           assertEquals(4, testView.getBadge(R.id.destination_home).getMaxCharacterCount());
@@ -686,6 +700,36 @@ public class BottomNavigationViewTest {
     }
 
     menuView.getChildAt(0).getContentDescription();
+  }
+
+  @UiThreadTest
+  @Test
+  @SmallTest
+  @SdkSuppress(minSdkVersion = Build.VERSION_CODES.M)
+  public void testOnInitializeAccessibilityNodeInfo() {
+    BottomNavigationMenuView menuView = bottomNavigation.menuView;
+
+    AccessibilityNodeInfoCompat groupInfoCompat = AccessibilityNodeInfoCompat.obtain();
+    ViewCompat.onInitializeAccessibilityNodeInfo(menuView, groupInfoCompat);
+
+    CollectionInfoCompat collectionInfo = groupInfoCompat.getCollectionInfo();
+    Assert.assertEquals(3, collectionInfo.getColumnCount());
+    Assert.assertEquals(1, collectionInfo.getRowCount());
+
+    BottomNavigationItemView secondChild = (BottomNavigationItemView) menuView.getChildAt(1);
+    secondChild.setSelected(true);
+    AccessibilityNodeInfoCompat buttonInfoCompat = AccessibilityNodeInfoCompat.obtain();
+    ViewCompat.onInitializeAccessibilityNodeInfo(secondChild, buttonInfoCompat);
+
+    // A tab that is currently selected won't be clickable by a11y
+    assertFalse(buttonInfoCompat.isClickable());
+    assertFalse(
+        AccessibilityUtils.hasAction(buttonInfoCompat, AccessibilityActionCompat.ACTION_CLICK));
+
+    CollectionItemInfoCompat itemInfo = buttonInfoCompat.getCollectionItemInfo();
+    Assert.assertEquals(1, itemInfo.getColumnIndex());
+    Assert.assertEquals(0, itemInfo.getRowIndex());
+    assertTrue(itemInfo.isSelected());
   }
 
   private void checkAndVerifyExclusiveItem(final Menu menu, final int id) throws Throwable {

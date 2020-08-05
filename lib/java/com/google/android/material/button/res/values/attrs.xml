@@ -31,7 +31,12 @@
     <attr name="android:insetRight"/>
     <attr name="android:insetTop"/>
     <attr name="android:insetBottom"/>
-    <!-- Background for the MaterialButton -->
+    <!-- Background for the MaterialButton. If this is set to a drawable or color, MaterialButton
+         will respect this background and not create its own MaterialShapeDrawable for the
+         background. This means that the insets, shape appearance, and stroke will be ignored.
+         If this attribute is not set or is @empty or @null, a MaterialShapeDrawable will be used
+         for the background based on the insets, shape appearance, and stroke. -->
+    <attr name="android:background"/>
     <attr name="backgroundTint"/>
     <attr name="backgroundTintMode"/>
     <!-- Elevation for the MaterialButton. -->
@@ -86,6 +91,10 @@
          default, this is false and multiple buttons in this group are allowed to be checked at
          once. -->
     <attr name="singleSelection"/>
+
+    <!-- Whether we prevent all child buttons from being deselected.
+         It's false by default. -->
+    <attr name="selectionRequired"/>
     <!-- The id of the child button that should be checked by default within this button group. -->
     <attr name="checkedButton" format="reference"/>
   </declare-styleable>

@@ -154,11 +154,11 @@ surface's background, instead of drawing another layer to the canvas.
 The following is a list of Material components that support elevation overlays
 in dark theme, because they use `colorSurface` and can be elevated:
 
-*   [Top App Bar](../components/AppBarLayout.md)
+*   [Top App Bar](../components/TopAppBar.md)
 *   [Bottom App Bar](../components/BottomAppBar.md)
-*   [Bottom Navigation](../components/BottomNavigationView.md)
+*   [Bottom Navigation](../components/BottomNavigation.md)
 *   [Tabs](../components/TabLayout.md)
-*   [Card](../components/MaterialCardView.md)
+*   [Card](../components/Card.md)
 *   [Dialog](../components/Dialog.md)
 *   [Menu](../components/Menu.md)
 *   [Bottom Sheet](../components/BottomSheetBehavior.md)

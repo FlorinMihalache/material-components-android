@@ -77,8 +77,7 @@ public boolean showMenu(View anchor) {
 The Exposed Dropdown Menu is implemented via the use of the `TextInputLayout`.
 For detailed information on how
 [Material text fields](https://material.io/design/components/text-fields.html)
-work, see the
-[TextInputLayout documentation](TextInputLayout.md).
+work, see the [TextInputLayout documentation](TextField.md).
 
 ### Usage
 
@@ -142,7 +141,13 @@ The example above will provide an editable filled Exposed Dropdown Menu.
 
 Note: In order to have a non editable variation of the menu, you should disable
 user input in the `AutoCompleteTextView`. That can be achieved by setting
-`android:editable="false"` on the `AutoCompleteTextView`.
+`android:inputType="none"` on the `AutoCompleteTextView`.
+
+#### Setting a default value
+
+In order to have a pre-selected value displayed, you can call
+`setText(CharSequence text, boolean filter)` on the `AutoCompleteTextView` with
+the filter set to `false`.
 
 ### Variations
 

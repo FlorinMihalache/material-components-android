@@ -164,8 +164,8 @@ public final class MaterialCalendar<S> extends PickerFragment<S> {
 
     recyclerView = root.findViewById(R.id.mtrl_calendar_months);
 
-    LinearLayoutManager layoutManager =
-        new LinearLayoutManager(getContext(), orientation, false) {
+    SmoothCalendarLayoutManager layoutManager =
+        new SmoothCalendarLayoutManager(getContext(), orientation, false) {
           @Override
           protected void calculateExtraLayoutSpace(@NonNull State state, @NonNull int[] ints) {
             if (orientation == LinearLayoutManager.HORIZONTAL) {
@@ -230,8 +230,8 @@ public final class MaterialCalendar<S> extends PickerFragment<S> {
   private ItemDecoration createItemDecoration() {
     return new ItemDecoration() {
 
-      private final Calendar startItem = UtcDates.getCalendar();
-      private final Calendar endItem = UtcDates.getCalendar();
+      private final Calendar startItem = UtcDates.getUtcCalendar();
+      private final Calendar endItem = UtcDates.getUtcCalendar();
 
       @Override
       public void onDraw(
@@ -290,7 +290,7 @@ public final class MaterialCalendar<S> extends PickerFragment<S> {
   }
 
   /**
-   * Changes the currently displayed {@link Month} to {@code moveTo}.
+   * Changes the currently displayed month to {@code moveTo}.
    *
    * @throws IllegalArgumentException If {@code moveTo} is not within the allowed {@link
    *     CalendarConstraints}.
@@ -304,12 +304,12 @@ public final class MaterialCalendar<S> extends PickerFragment<S> {
     current = moveTo;
     if (jump && isForward) {
       recyclerView.scrollToPosition(moveToPosition - SMOOTH_SCROLL_MAX);
-      recyclerView.smoothScrollToPosition(moveToPosition);
+      postSmoothRecyclerViewScroll(moveToPosition);
     } else if (jump) {
       recyclerView.scrollToPosition(moveToPosition + SMOOTH_SCROLL_MAX);
-      recyclerView.smoothScrollToPosition(moveToPosition);
+      postSmoothRecyclerViewScroll(moveToPosition);
     } else {
-      recyclerView.smoothScrollToPosition(moveToPosition);
+      postSmoothRecyclerViewScroll(moveToPosition);
     }
   }
 
@@ -441,6 +441,16 @@ public final class MaterialCalendar<S> extends PickerFragment<S> {
             if (currentItem - 1 >= 0) {
               setCurrentMonth(monthsPagerAdapter.getPageMonth(currentItem - 1));
             }
+          }
+        });
+  }
+
+  private void postSmoothRecyclerViewScroll(final int position) {
+    recyclerView.post(
+        new Runnable() {
+          @Override
+          public void run() {
+            recyclerView.smoothScrollToPosition(position);
           }
         });
   }

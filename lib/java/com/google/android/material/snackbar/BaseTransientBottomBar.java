@@ -268,7 +268,13 @@ public abstract class BaseTransientBottomBar<B extends BaseTransientBottomBar<B>
       new Runnable() {
         @Override
         public void run() {
-          int currentInsetBottom = getScreenHeight() - getViewAbsoluteBottom();
+          if (view == null || context == null) {
+            return;
+          }
+          // Calculate current bottom inset, factoring in translationY to account for where the
+          // view will likely be animating to.
+          int currentInsetBottom =
+              getScreenHeight() - getViewAbsoluteBottom() + (int) view.getTranslationY();
           if (currentInsetBottom >= extraBottomMarginGestureInset) {
             // No need to add extra offset if view is already outside of bottom gesture area
             return;
@@ -508,13 +514,22 @@ public abstract class BaseTransientBottomBar<B extends BaseTransientBottomBar<B>
     return gestureInsetBottomIgnored;
   }
 
-  /** Returns the {@link AnimationMode}. */
+  /**
+   * Returns the animation mode.
+   *
+   * @see #setAnimationMode(int)
+   */
   @AnimationMode
   public int getAnimationMode() {
     return view.getAnimationMode();
   }
 
-  /** Sets the {@link AnimationMode}. */
+  /**
+   * Sets the animation mode.
+   *
+   * @param animationMode of {@link #ANIMATION_MODE_SLIDE} or {@link #ANIMATION_MODE_FADE}.
+   * @see #getAnimationMode()
+   */
   @NonNull
   public B setAnimationMode(@AnimationMode int animationMode) {
     view.setAnimationMode(animationMode);
@@ -826,6 +841,9 @@ public abstract class BaseTransientBottomBar<B extends BaseTransientBottomBar<B>
         new Runnable() {
           @Override
           public void run() {
+            if (view == null) {
+              return;
+            }
             // Make view VISIBLE now that we are about to start the enter animation
             view.setVisibility(View.VISIBLE);
             if (view.getAnimationMode() == ANIMATION_MODE_FADE) {

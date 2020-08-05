@@ -53,6 +53,7 @@
   <public name="errorEnabled" type="attr"/>
   <public name="errorTextAppearance" type="attr"/>
   <public name="errorTextColor" type="attr"/>
+  <public name="errorContentDescription" type="attr"/>
   <public name="errorIconDrawable" type="attr"/>
   <public name="errorIconTint" type="attr"/>
   <public name="errorIconTintMode" type="attr"/>
@@ -69,6 +70,9 @@
   <public name="startIconCheckable" type="attr"/>
   <public name="startIconTint" type="attr"/>
   <public name="startIconTintMode" type="attr"/>
+  <public name="placeholderText" type="attr"/>
+  <public name="placeholderTextAppearance" type="attr"/>
+  <public name="placeholderTextColor" type="attr"/>
   <public name="endIconMode" type="attr"/>
   <public name="endIconDrawable" type="attr"/>
   <public name="endIconContentDescription" type="attr"/>
@@ -86,9 +90,15 @@
   <!--Deprecated. Use endIconTintMode instead. -->
   <public name="passwordToggleTintMode" type="attr"/>
 
+  <public name="textInputLayoutFocusedRectEnabled" type="attr"/>
+
   <public name="Widget.Design.TextInputLayout" type="style"/>
   <public name="Widget.MaterialComponents.TextInputLayout.FilledBox" type="style"/>
   <public name="Widget.MaterialComponents.TextInputLayout.FilledBox.Dense" type="style"/>
   <public name="Widget.MaterialComponents.TextInputLayout.OutlinedBox" type="style"/>
   <public name="Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense" type="style"/>
+  <public name="Widget.MaterialComponents.TextInputLayout.FilledBox.ExposedDropdownMenu" type="style"/>
+  <public name="Widget.MaterialComponents.TextInputLayout.FilledBox.Dense.ExposedDropdownMenu" type="style"/>
+  <public name="Widget.MaterialComponents.TextInputLayout.OutlinedBox.ExposedDropdownMenu" type="style"/>
+  <public name="Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense.ExposedDropdownMenu" type="style"/>
 </resources>

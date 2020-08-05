@@ -42,6 +42,7 @@ import android.graphics.RectF;
 import android.graphics.Region;
 import android.graphics.Region.Op;
 import android.graphics.drawable.Drawable;
+import android.os.Build;
 import android.os.Build.VERSION;
 import android.os.Build.VERSION_CODES;
 import androidx.annotation.AttrRes;
@@ -55,6 +56,7 @@ import androidx.annotation.StyleRes;
 import androidx.core.graphics.drawable.TintAwareDrawable;
 import androidx.core.util.ObjectsCompat;
 import android.util.AttributeSet;
+import android.util.Log;
 import com.google.android.material.color.MaterialColors;
 import com.google.android.material.elevation.ElevationOverlayProvider;
 import com.google.android.material.shadow.ShadowRenderer;
@@ -63,12 +65,15 @@ import com.google.android.material.shape.ShapeAppearancePathProvider.PathListene
 import com.google.android.material.shape.ShapePath.ShadowCompatOperation;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.BitSet;
 
 /**
  * Base drawable class for Material Shapes that handles shadows, elevation, scale and color for a
  * generated path.
  */
 public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable, Shapeable {
+
+  private static final String TAG = MaterialShapeDrawable.class.getSimpleName();
 
   private static final float SHADOW_RADIUS_MULTIPLIER = .75f;
 
@@ -107,6 +112,7 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
   // Inter-method state.
   private final ShadowCompatOperation[] cornerShadowOperation = new ShadowCompatOperation[4];
   private final ShadowCompatOperation[] edgeShadowOperation = new ShadowCompatOperation[4];
+  private final BitSet containsIncompatibleShadowOp = new BitSet(8);
   private boolean pathDirty;
 
   // Pre-allocated objects that are re-used several times during path computation and rendering.
@@ -129,8 +135,9 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
   @Nullable private PorterDuffColorFilter tintFilter;
   @Nullable private PorterDuffColorFilter strokeTintFilter;
 
-  @Nullable private Rect padding;
   @NonNull private final RectF pathBounds = new RectF();
+
+  private boolean shadowBitmapDrawingEnable = true;
 
   /**
    * Returns a {@code MaterialShapeDrawable} with the elevation overlay functionality initialized, a
@@ -202,11 +209,13 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
           @Override
           public void onCornerPathCreated(
               @NonNull ShapePath cornerPath, Matrix transform, int count) {
+            containsIncompatibleShadowOp.set(count, cornerPath.containsIncompatibleShadowOp());
             cornerShadowOperation[count] = cornerPath.createShadowCompatOperation(transform);
           }
 
           @Override
           public void onEdgePathCreated(@NonNull ShapePath edgePath, Matrix transform, int count) {
+            containsIncompatibleShadowOp.set(count + 4, edgePath.containsIncompatibleShadowOp());
             edgeShadowOperation[count] = edgePath.createShadowCompatOperation(transform);
           }
         };
@@ -458,12 +467,12 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
     return rectF;
   }
 
-  /** Updates the corners for the given {@link cornerSize}. */
+  /** Updates the corners for the given {@link CornerSize}. */
   public void setCornerSize(float cornerSize) {
     setShapeAppearanceModel(drawableState.shapeAppearanceModel.withCornerSize(cornerSize));
   }
 
-  /** Updates the corners for the given {@link cornerSize}. */
+  /** Updates the corners for the given {@link CornerSize}. */
   public void setCornerSize(@NonNull CornerSize cornerSize) {
     setShapeAppearanceModel(drawableState.shapeAppearanceModel.withCornerSize(cornerSize));
   }
@@ -488,8 +497,8 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
 
   @Override
   public boolean getPadding(@NonNull Rect padding) {
-    if (this.padding != null) {
-      padding.set(this.padding);
+    if (drawableState.padding != null) {
+      padding.set(drawableState.padding);
       return true;
     } else {
       return super.getPadding(padding);
@@ -510,7 +519,6 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
     }
 
     drawableState.padding.set(left, top, right, bottom);
-    padding = drawableState.padding;
     invalidateSelf();
   }
 
@@ -733,6 +741,16 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
     return drawableState.shadowCompatOffset;
   }
 
+  @RestrictTo(LIBRARY_GROUP)
+  public void setShadowBitmapDrawingEnable(boolean enable) {
+    shadowBitmapDrawingEnable = enable;
+  }
+
+  @RestrictTo(LIBRARY_GROUP)
+  public void setEdgeIntersectionCheckEnable(boolean enable) {
+    pathProvider.setEdgeIntersectionCheckEnable(enable);
+  }
+
   /**
    * Sets the shadow offset rendered by the fake shadow when {@link #requiresCompatShadow()} is
    * true. This can make the shadow appear more on the bottom or top of the view to make a more
@@ -775,8 +793,8 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
 
   /**
    * Get the shadow radius rendered by the path in pixels. This method should be used only when the
-   * actual size of the shadow is required. Usually {@link getElevation()} should be used instead to
-   * get the actual elevation of this view as it might be different.
+   * actual size of the shadow is required. Usually {@link #getElevation()} should be used instead
+   * to get the actual elevation of this view as it might be different.
    */
   public int getShadowRadius() {
     return drawableState.shadowCompatRadius;
@@ -797,8 +815,9 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
    * Returns true if fake shadows should be drawn. Native elevation shadows can't be drawn on API <
    * 21 or when the shape is concave.
    */
-  private boolean requiresCompatShadow() {
-    return VERSION.SDK_INT < VERSION_CODES.LOLLIPOP || (!isRoundRect() && !path.isConvex());
+  public boolean requiresCompatShadow() {
+    return VERSION.SDK_INT < VERSION_CODES.LOLLIPOP
+        || (!isRoundRect() && !path.isConvex() && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q);
   }
 
   /**
@@ -928,44 +947,7 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
       pathDirty = false;
     }
 
-    if (hasCompatShadow()) {
-      // Save the canvas before changing the clip bounds.
-      canvas.save();
-
-      prepareCanvasForShadow(canvas);
-
-      // The extra height is the amount that the path draws outside of the bounds of the shape. This
-      // happens for some shapes like TriangleEdgeTreament when it draws a triangle outside.
-      int pathExtraWidth = (int) (pathBounds.width() - getBounds().width());
-      int pathExtraHeight = (int) (pathBounds.height() - getBounds().height());
-
-      // Drawing the shadow in a bitmap lets us use the clear paint rather than using clipPath to
-      // prevent drawing shadow under the shape. clipPath has problems :-/
-      Bitmap shadowLayer =
-          Bitmap.createBitmap(
-              (int) pathBounds.width() + drawableState.shadowCompatRadius * 2 + pathExtraWidth,
-              (int) pathBounds.height() + drawableState.shadowCompatRadius * 2 + pathExtraHeight,
-              Bitmap.Config.ARGB_8888);
-      Canvas shadowCanvas = new Canvas(shadowLayer);
-
-      // Top Left of shadow (left - shadowCompatRadius, top - shadowCompatRadius) should be drawn at
-      // (0, 0) on shadowCanvas. Offset is handled by prepareCanvasForShadow and drawCompatShadow.
-      float shadowLeft = getBounds().left - drawableState.shadowCompatRadius - pathExtraWidth;
-      float shadowTop = getBounds().top - drawableState.shadowCompatRadius - pathExtraHeight;
-      shadowCanvas.translate(-shadowLeft, -shadowTop);
-
-      drawCompatShadow(shadowCanvas);
-
-      canvas.drawBitmap(shadowLayer, shadowLeft, shadowTop, null);
-
-      // Because we create the bitmap every time, we can recycle it. We may need to stop doing this
-      // if we end up keeping the bitmap in memory for performance.
-      shadowLayer.recycle();
-
-      // Restore the canvas to the same size it was before drawing any shadows.
-      canvas.restore();
-    }
-
+    maybeDrawCompatShadow(canvas);
     if (hasFill()) {
       drawFillShape(canvas);
     }
@@ -975,6 +957,53 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
 
     fillPaint.setAlpha(prevAlpha);
     strokePaint.setAlpha(prevStrokeAlpha);
+  }
+
+  private void maybeDrawCompatShadow(@NonNull Canvas canvas) {
+    if (!hasCompatShadow()) {
+      return;
+    }
+    // Save the canvas before changing the clip bounds.
+    canvas.save();
+    prepareCanvasForShadow(canvas);
+    if (!shadowBitmapDrawingEnable) {
+      drawCompatShadow(canvas);
+      canvas.restore();
+      return;
+    }
+
+    // The extra height is the amount that the path draws outside of the bounds of the shape. This
+    // happens for some shapes like TriangleEdgeTreament when it draws a triangle outside.
+    int pathExtraWidth = (int) (pathBounds.width() - getBounds().width());
+    int pathExtraHeight = (int) (pathBounds.height() - getBounds().height());
+
+    if (pathExtraWidth < 0 || pathExtraHeight < 0) {
+      throw new IllegalStateException(
+          "Invalid shadow bounds. Check that the treatments result in a valid path.");
+    }
+
+    // Drawing the shadow in a bitmap lets us use the clear paint rather than using clipPath to
+    // prevent drawing shadow under the shape. clipPath has problems :-/
+    Bitmap shadowLayer =
+        Bitmap.createBitmap(
+            (int) pathBounds.width() + drawableState.shadowCompatRadius * 2 + pathExtraWidth,
+            (int) pathBounds.height() + drawableState.shadowCompatRadius * 2 + pathExtraHeight,
+            Bitmap.Config.ARGB_8888);
+    Canvas shadowCanvas = new Canvas(shadowLayer);
+
+    // Top Left of shadow (left - shadowCompatRadius, top - shadowCompatRadius) should be drawn at
+    // (0, 0) on shadowCanvas. Offset is handled by prepareCanvasForShadow and drawCompatShadow.
+    float shadowLeft = getBounds().left - drawableState.shadowCompatRadius - pathExtraWidth;
+    float shadowTop = getBounds().top - drawableState.shadowCompatRadius - pathExtraHeight;
+    shadowCanvas.translate(-shadowLeft, -shadowTop);
+    drawCompatShadow(shadowCanvas);
+    canvas.drawBitmap(shadowLayer, shadowLeft, shadowTop, null);
+    // Because we create the bitmap every time, we can recycle it. We may need to stop doing this
+    // if we end up keeping the bitmap in memory for performance.
+    shadowLayer.recycle();
+
+    // Restore the canvas to the same size it was before drawing any shadows.
+    canvas.restore();
   }
 
   /**
@@ -999,7 +1028,9 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
       @NonNull ShapeAppearanceModel shapeAppearanceModel,
       @NonNull RectF bounds) {
     if (shapeAppearanceModel.isRoundRect(bounds)) {
-      float cornerSize = shapeAppearanceModel.getTopRightCornerSize().getCornerSize(bounds);
+      float cornerSize =
+          shapeAppearanceModel.getTopRightCornerSize().getCornerSize(bounds)
+              * drawableState.interpolation;
       canvas.drawRoundRect(bounds, cornerSize, cornerSize, paint);
     } else {
       canvas.drawPath(path, paint);
@@ -1023,7 +1054,7 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
     // We only handle clipping as a convenience for older apis where we are trying to seamlessly
     // provide fake shadows. On newer versions of android, we require that the parent is set so that
     // clipChildren is false.
-    if (VERSION.SDK_INT < VERSION_CODES.LOLLIPOP) {
+    if (VERSION.SDK_INT < VERSION_CODES.LOLLIPOP && shadowBitmapDrawingEnable) {
       // Add space and offset the canvas for the shadows. Otherwise any shadows drawn outside would
       // be clipped and not visible.
       Rect canvasClipBounds = canvas.getClipBounds();
@@ -1045,6 +1076,12 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
    * completely covered by the shape.
    */
   private void drawCompatShadow(@NonNull Canvas canvas) {
+    if (containsIncompatibleShadowOp.cardinality() > 0) {
+      Log.w(
+          TAG,
+          "Compatibility shadow requested but can't be drawn for all operations in this shape.");
+    }
+
     if (drawableState.shadowCompatOffset != 0) {
       canvas.drawPath(path, shadowRenderer.getShadowPaint());
     }
@@ -1055,12 +1092,14 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
       edgeShadowOperation[index].draw(shadowRenderer, drawableState.shadowCompatRadius, canvas);
     }
 
-    int shadowOffsetX = getShadowOffsetX();
-    int shadowOffsetY = getShadowOffsetY();
+    if (shadowBitmapDrawingEnable) {
+      int shadowOffsetX = getShadowOffsetX();
+      int shadowOffsetY = getShadowOffsetY();
 
-    canvas.translate(-shadowOffsetX, -shadowOffsetY);
-    canvas.drawPath(path, clearPaint);
-    canvas.translate(shadowOffsetX, shadowOffsetY);
+      canvas.translate(-shadowOffsetX, -shadowOffsetY);
+      canvas.drawPath(path, clearPaint);
+      canvas.translate(shadowOffsetX, shadowOffsetY);
+    }
   }
 
   /** Returns the X offset of the shadow from the bounds of the shape. */
@@ -1134,14 +1173,20 @@ public class MaterialShapeDrawable extends Drawable implements TintAwareDrawable
     }
 
     if (isRoundRect()) {
-      float radius = getTopLeftCornerResolvedSize();
+      float radius = getTopLeftCornerResolvedSize() * drawableState.interpolation;
       outline.setRoundRect(getBounds(), radius);
       return;
     }
 
     calculatePath(getBoundsAsRectF(), path);
-    if (path.isConvex()) {
-      outline.setConvexPath(path);
+    if (path.isConvex() || Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+      try {
+        outline.setConvexPath(path);
+      } catch (IllegalArgumentException ignored) {
+        // The change to support concave paths was done late in the release cycle. People
+        // using pre-releases of Q would experience a crash here.
+      }
+
     }
   }
 

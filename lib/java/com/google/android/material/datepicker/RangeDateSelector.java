@@ -28,11 +28,13 @@ import androidx.annotation.RestrictTo;
 import androidx.annotation.RestrictTo.Scope;
 import androidx.core.util.Pair;
 import androidx.core.util.Preconditions;
+import android.text.InputType;
 import android.util.DisplayMetrics;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
+import com.google.android.material.internal.ManufacturerUtils;
 import com.google.android.material.internal.ViewUtils;
 import com.google.android.material.resources.MaterialAttributes;
 import com.google.android.material.textfield.TextInputLayout;
@@ -49,8 +51,9 @@ import java.util.Collection;
 @RestrictTo(Scope.LIBRARY_GROUP)
 public class RangeDateSelector implements DateSelector<Pair<Long, Long>> {
 
-  private static final String INVALID_RANGE_END_ERROR = "";
   private String invalidRangeStartError;
+  // "" is not considered an error
+  private final String invalidRangeEndError = " ";
   @Nullable private Long selectedStartItem = null;
   @Nullable private Long selectedEndItem = null;
   @Nullable private Long proposedTextStart = null;
@@ -177,12 +180,15 @@ public class RangeDateSelector implements DateSelector<Pair<Long, Long>> {
     final TextInputLayout endTextInput = root.findViewById(R.id.mtrl_picker_text_input_range_end);
     EditText startEditText = startTextInput.getEditText();
     EditText endEditText = endTextInput.getEditText();
+    if (ManufacturerUtils.isDateInputKeyboardMissingSeparatorCharacters()) {
+      // Using the URI variation places the '/' and '.' in more prominent positions
+      startEditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+      endEditText.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+    }
 
-    String pattern = root.getResources().getString(R.string.mtrl_picker_text_input_date_format);
     invalidRangeStartError = root.getResources().getString(R.string.mtrl_picker_invalid_range);
 
-    SimpleDateFormat format = UtcDates.getSimpleFormat(pattern);
-    format.setLenient(false);
+    SimpleDateFormat format = UtcDates.getTextInputFormat();
 
     if (selectedStartItem != null) {
       startEditText.setText(format.format(selectedStartItem));
@@ -193,8 +199,10 @@ public class RangeDateSelector implements DateSelector<Pair<Long, Long>> {
       proposedTextEnd = selectedEndItem;
     }
 
+    String formatHint = UtcDates.getTextInputHint(root.getResources(), format);
+
     startEditText.addTextChangedListener(
-        new DateFormatTextWatcher(pattern, format, startTextInput, constraints) {
+        new DateFormatTextWatcher(formatHint, format, startTextInput, constraints) {
 
           @Override
           void onValidDate(@Nullable Long day) {
@@ -210,7 +218,7 @@ public class RangeDateSelector implements DateSelector<Pair<Long, Long>> {
         });
 
     endEditText.addTextChangedListener(
-        new DateFormatTextWatcher(pattern, format, endTextInput, constraints) {
+        new DateFormatTextWatcher(formatHint, format, endTextInput, constraints) {
           void onValidDate(@Nullable Long day) {
             proposedTextEnd = day;
             updateIfValidTextProposal(startTextInput, endTextInput, listener);
@@ -237,6 +245,7 @@ public class RangeDateSelector implements DateSelector<Pair<Long, Long>> {
       @NonNull OnSelectionChangedListener<Pair<Long, Long>> listener) {
     if (proposedTextStart == null || proposedTextEnd == null) {
       clearInvalidRange(startTextInput, endTextInput);
+      listener.onIncompleteSelectionChanged();
       return;
     }
     if (isValidRange(proposedTextStart, proposedTextEnd)) {
@@ -245,6 +254,7 @@ public class RangeDateSelector implements DateSelector<Pair<Long, Long>> {
       listener.onSelectionChanged(getSelection());
     } else {
       setInvalidRange(startTextInput, endTextInput);
+      listener.onIncompleteSelectionChanged();
     }
   }
 
@@ -252,14 +262,14 @@ public class RangeDateSelector implements DateSelector<Pair<Long, Long>> {
     if (start.getError() != null && invalidRangeStartError.contentEquals(start.getError())) {
       start.setError(null);
     }
-    if (end.getError() != null && INVALID_RANGE_END_ERROR.contentEquals(end.getError())) {
+    if (end.getError() != null && invalidRangeEndError.contentEquals(end.getError())) {
       end.setError(null);
     }
   }
 
   private void setInvalidRange(@NonNull TextInputLayout start, @NonNull TextInputLayout end) {
     start.setError(invalidRangeStartError);
-    end.setError(INVALID_RANGE_END_ERROR);
+    end.setError(invalidRangeEndError);
   }
 
   /* Parcelable interface */

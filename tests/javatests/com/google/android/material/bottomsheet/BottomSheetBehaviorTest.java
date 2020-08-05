@@ -59,7 +59,7 @@ import androidx.test.runner.AndroidJUnit4;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 import com.google.android.material.testapp.BottomSheetBehaviorActivity;
 import com.google.android.material.testapp.R;
-import com.google.android.material.testutils.CoordinatorLayoutUtils;
+import com.google.android.material.testutils.AccessibilityUtils;
 import com.google.android.material.testutils.DesignViewActions;
 import org.hamcrest.Matcher;
 import org.hamcrest.Matchers;
@@ -78,6 +78,7 @@ public class BottomSheetBehaviorTest {
       implements IdlingResource {
 
     private boolean isIdle;
+    private boolean idleWhileSettling;
 
     private IdlingResource.ResourceCallback resourceCallback;
 
@@ -117,9 +118,13 @@ public class BottomSheetBehaviorTest {
       resourceCallback = callback;
     }
 
+    public void setIdleWhileSettling(boolean idleWhileSettling) {
+      this.idleWhileSettling = idleWhileSettling;
+    }
+
     private boolean isIdleState(int state) {
       return state != BottomSheetBehavior.STATE_DRAGGING
-          && state != BottomSheetBehavior.STATE_SETTLING;
+          && (idleWhileSettling || state != BottomSheetBehavior.STATE_SETTLING);
     }
   }
 
@@ -525,6 +530,79 @@ public class BottomSheetBehaviorTest {
 
   @Test
   @MediumTest
+  public void testNoSwipeUpToExpand() {
+    getBehavior().setDraggable(false);
+    Espresso.onView(ViewMatchers.withId(R.id.bottom_sheet))
+        .perform(
+            DesignViewActions.withCustomConstraints(
+                new GeneralSwipeAction(
+                    Swipe.FAST,
+                    GeneralLocation.VISIBLE_CENTER,
+                    view -> new float[] {view.getWidth() / 2, 0},
+                    Press.FINGER),
+                ViewMatchers.isDisplayingAtLeast(5)));
+
+    Espresso.onView(ViewMatchers.withId(R.id.bottom_sheet))
+        .check(ViewAssertions.matches(ViewMatchers.isDisplayed()));
+    assertThat(getBehavior().getState(), is(BottomSheetBehavior.STATE_COLLAPSED));
+  }
+
+  @Test
+  @MediumTest
+  public void testNoSwipeDownToCollapse() throws Throwable {
+    checkSetState(BottomSheetBehavior.STATE_EXPANDED, ViewMatchers.isDisplayed());
+    getBehavior().setDraggable(false);
+    Espresso.onView(ViewMatchers.withId(R.id.bottom_sheet))
+        .perform(
+            DesignViewActions.withCustomConstraints(
+                new GeneralSwipeAction(
+                    Swipe.FAST,
+                    // Manually calculate the starting coordinates to make sure that the touch
+                    // actually falls onto the view on Gingerbread
+                    view -> {
+                      int[] location = new int[2];
+                      view.getLocationInWindow(location);
+                      return new float[] {view.getWidth() / 2, location[1] + 1};
+                    },
+                    // Manually calculate the ending coordinates to make sure that the bottom
+                    // sheet is collapsed, not hidden
+                    view -> {
+                      BottomSheetBehavior<?> behavior = getBehavior();
+                      return new float[] {
+                        // x: center of the bottom sheet
+                        view.getWidth() / 2,
+                        // y: just above the peek height
+                        view.getHeight() - behavior.getPeekHeight()
+                      };
+                    },
+                    Press.FINGER),
+                ViewMatchers.isDisplayingAtLeast(5)));
+
+    Espresso.onView(ViewMatchers.withId(R.id.bottom_sheet))
+        .check(ViewAssertions.matches(ViewMatchers.isDisplayed()));
+    assertThat(getBehavior().getState(), is(BottomSheetBehavior.STATE_EXPANDED));
+  }
+
+  @Test
+  @MediumTest
+  public void testNoDragging() {
+    getBehavior().setDraggable(false);
+    Espresso.onView(ViewMatchers.withId(R.id.bottom_sheet))
+        // Drag (and not release)
+        .perform(
+            new DragAction(
+                GeneralLocation.VISIBLE_CENTER, GeneralLocation.TOP_CENTER, Press.FINGER))
+        // Check that the bottom sheet is NOT in STATE_DRAGGING
+        .check(
+            (view, e) -> {
+              assertThat(view, is(ViewMatchers.isDisplayed()));
+              BottomSheetBehavior<?> behavior = BottomSheetBehavior.from(view);
+              assertThat(behavior.getState(), not(is(BottomSheetBehavior.STATE_DRAGGING)));
+            });
+  }
+
+  @Test
+  @MediumTest
   public void testHalfExpandedToExpanded() throws Throwable {
     getBehavior().setFitToContents(false);
     checkSetState(BottomSheetBehavior.STATE_HALF_EXPANDED, ViewMatchers.isDisplayed());
@@ -904,14 +982,13 @@ public class BottomSheetBehaviorTest {
               || state == BottomSheetBehavior.STATE_HALF_EXPANDED;
       boolean hasDismissAction = state != BottomSheetBehavior.STATE_HIDDEN && behavior.isHideable();
       assertThat(
-          CoordinatorLayoutUtils.hasAction(
-              bottomSheet, AccessibilityNodeInfoCompat.ACTION_COLLAPSE),
+          AccessibilityUtils.hasAction(bottomSheet, AccessibilityNodeInfoCompat.ACTION_COLLAPSE),
           equalTo(hasCollapseAction));
       assertThat(
-          CoordinatorLayoutUtils.hasAction(bottomSheet, AccessibilityNodeInfoCompat.ACTION_EXPAND),
+          AccessibilityUtils.hasAction(bottomSheet, AccessibilityNodeInfoCompat.ACTION_EXPAND),
           equalTo(hasExpandAction));
       assertThat(
-          CoordinatorLayoutUtils.hasAction(bottomSheet, AccessibilityNodeInfoCompat.ACTION_DISMISS),
+          AccessibilityUtils.hasAction(bottomSheet, AccessibilityNodeInfoCompat.ACTION_DISMISS),
           equalTo(hasDismissAction));
     }
   }

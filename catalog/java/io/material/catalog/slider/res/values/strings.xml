@@ -18,6 +18,7 @@
   <string name="cat_slider_title" description="Title for the screen that showcases demonstrative usages of the Slider widget">Slider</string>
   <string name="cat_slider_demo_continuous_title" description="Title for the continuous Slider widget demo">Continuous Slider demo</string>
   <string name="cat_slider_demo_discrete_title" description="Title for the discrete Slider widget demo">Discrete Slider demo</string>
+  <string name="cat_slider_demo_scroll_container_title" description="Title for the Slider inside scrolling container demo">Slider in scrolling container demo</string>
 
   <string name="cat_slider_description" description="Body text describing the Slider widget within the design system [CHAR LIMIT=NONE]">
     Sliders let users select from a range of values by moving the slider thumb.
@@ -27,9 +28,13 @@
     Discrete sliders allow users to select a specific value from a range.
   </string>
 
+  <string name="cat_slider_set" description="The label for a set button">Set</string>
   <string name="cat_slider_title_1" description="The title for the first demonstration slider">This one goes to eleven</string>
   <string name="cat_slider_title_2" description="The title for a demonstration slider">From 100 to 1000</string>
   <string name="cat_slider_title_3" description="The title for a demonstration slider">Negative numbers!</string>
   <string name="cat_slider_title_4" description="The title for a demonstration slider">With a label formatter</string>
-  <string name="cat_slider_title_5" description="The title for a demonstration slider">I can has decimal numbers?</string>
+  <string name="cat_slider_title_5" description="The title for a demonstration slider">I can have decimal numbers?</string>
+  <string name="cat_slider_start_touch_description" description="Indicates the slider is now being touched">Slider started being touched</string>
+  <string name="cat_slider_stop_touch_description" description="Indicates the slider stopped being touched">Slider stopped being touched</string>
+
 </resources>

@@ -98,6 +98,7 @@
         android:textAppearance="?attr/textAppearanceSubtitle1"/>
 
     <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/icon_only_group"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content">
       <Button
@@ -105,6 +106,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:minWidth="@dimen/mtrl_min_touch_target_size"
+          android:contentDescription="@string/cat_icon_button_label_paint_bucket"
           app:icon="@drawable/ic_colors_24px"
           app:iconPadding="0dp"/>
       <Button
@@ -112,6 +114,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:minWidth="@dimen/mtrl_min_touch_target_size"
+          android:contentDescription="@string/cat_icon_button_label_plus"
           app:icon="@drawable/ic_fab_24px"
           app:iconPadding="0dp"/>
       <Button
@@ -119,6 +122,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:minWidth="@dimen/mtrl_min_touch_target_size"
+          android:contentDescription="@string/cat_icon_button_label_components"
           app:icon="@drawable/ic_components_24px"
           app:iconPadding="0dp"/>
       <Button
@@ -126,6 +130,7 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:minWidth="@dimen/mtrl_min_touch_target_size"
+          android:contentDescription="@string/cat_icon_button_label_accelerator"
           app:icon="@drawable/ic_accelerator_24px"
           app:iconPadding="0dp"/>
       <Button
@@ -133,8 +138,20 @@
           android:layout_width="wrap_content"
           android:layout_height="wrap_content"
           android:minWidth="@dimen/mtrl_min_touch_target_size"
+          android:contentDescription="@string/cat_icon_button_label_dialog"
           app:icon="@drawable/ic_dialogs_24px"
           app:iconPadding="0dp"/>
     </com.google.android.material.button.MaterialButtonToggleGroup>
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+      android:id="@+id/switch_toggle"
+      android:paddingTop="16dp"
+      android:layout_width="wrap_content"
+      android:layout_height="match_parent"
+      android:layout_gravity="center"
+      android:checked="false"
+      android:enabled="true"
+      android:text="@string/cat_button_require_selection" />
+
   </LinearLayout>
 </ScrollView>

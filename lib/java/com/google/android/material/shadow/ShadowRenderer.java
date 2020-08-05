@@ -65,19 +65,19 @@ public class ShadowRenderer {
   private static final float[] cornerPositions = new float[] {0f, 0f, .5f, 1f};
 
   private final Path scratch = new Path();
+  private Paint transparentPaint = new Paint();
 
   public ShadowRenderer() {
     this(Color.BLACK);
   }
 
   public ShadowRenderer(int color) {
+    shadowPaint = new Paint();
     setShadowColor(color);
 
+    transparentPaint.setColor(Color.TRANSPARENT);
     cornerShadowPaint = new Paint(Paint.DITHER_FLAG);
     cornerShadowPaint.setStyle(Paint.Style.FILL);
-
-    shadowPaint = new Paint();
-    shadowPaint.setColor(shadowStartColor);
 
     edgeShadowPaint = new Paint(cornerShadowPaint);
   }
@@ -86,6 +86,7 @@ public class ShadowRenderer {
     shadowStartColor = ColorUtils.setAlphaComponent(color, COLOR_ALPHA_START);
     shadowMiddleColor = ColorUtils.setAlphaComponent(color, COLOR_ALPHA_MIDDLE);
     shadowEndColor = ColorUtils.setAlphaComponent(color, COLOR_ALPHA_END);
+    shadowPaint.setColor(shadowStartColor);
   }
 
   /** Draws an edge shadow on the canvas in the current bounds with the matrix transform applied. */
@@ -148,27 +149,33 @@ public class ShadowRenderer {
       cornerColors[3] = shadowEndColor;
     }
 
-    float startRatio = 1f - (elevation / (bounds.width() / 2f));
+    float radius = bounds.width() / 2f;
+    // The shadow is not big enough to draw.
+    if (radius <= 0) {
+      return;
+    }
+
+    float startRatio = 1f - (elevation / radius);
     float midRatio = startRatio + ((1f - startRatio) / 2f);
     cornerPositions[1] = startRatio;
     cornerPositions[2] = midRatio;
-
     cornerShadowPaint.setShader(
         new RadialGradient(
             bounds.centerX(),
             bounds.centerY(),
-            bounds.width() / 2,
+            radius,
             cornerColors,
             cornerPositions,
             Shader.TileMode.CLAMP));
 
     // TODO(b/117606382): handle oval bounds by scaling the canvas.
-
     canvas.save();
     canvas.concat(matrix);
 
     if (!drawShadowInsideBounds) {
       canvas.clipPath(arcBounds, Op.DIFFERENCE);
+      // This line is required for the next drawArc to work correctly, I think.
+      canvas.drawPath(arcBounds, transparentPaint);
     }
 
     canvas.drawArc(bounds, startAngle, sweepAngle, true, cornerShadowPaint);

@@ -18,16 +18,25 @@ package com.google.android.material.textfield;
 
 import com.google.android.material.R;
 
+import static com.google.android.material.theme.overlay.MaterialThemeOverlay.wrap;
+
 import android.content.Context;
-import android.os.Build;
+import android.content.res.TypedArray;
+import android.graphics.Point;
+import android.graphics.Rect;
+import android.os.Build.VERSION;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.widget.AppCompatEditText;
+import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.View;
 import android.view.ViewParent;
+import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import com.google.android.material.internal.ManufacturerUtils;
+import com.google.android.material.internal.ThemeEnforcement;
 
 /**
  * A special sub-class of {@link android.widget.EditText} designed for use as a child of {@link
@@ -38,16 +47,32 @@ import android.view.inputmethod.InputConnection;
  */
 public class TextInputEditText extends AppCompatEditText {
 
-  public TextInputEditText(Context context) {
+  private final Rect parentRect = new Rect();
+  private boolean textInputLayoutFocusedRectEnabled;
+
+  public TextInputEditText(@NonNull Context context) {
     this(context, null);
   }
 
-  public TextInputEditText(Context context, AttributeSet attrs) {
+  public TextInputEditText(@NonNull Context context, @Nullable AttributeSet attrs) {
     this(context, attrs, R.attr.editTextStyle);
   }
 
-  public TextInputEditText(Context context, AttributeSet attrs, int defStyleAttr) {
-    super(context, attrs, defStyleAttr);
+  public TextInputEditText(
+      @NonNull Context context, @Nullable AttributeSet attrs, int defStyleAttr) {
+    super(wrap(context, attrs, defStyleAttr, 0), attrs, defStyleAttr);
+    TypedArray attributes =
+        ThemeEnforcement.obtainStyledAttributes(
+            context,
+            attrs,
+            R.styleable.TextInputEditText,
+            defStyleAttr,
+            R.style.Widget_Design_TextInputEditText);
+
+    setTextInputLayoutFocusedRectEnabled(
+        attributes.getBoolean(R.styleable.TextInputEditText_textInputLayoutFocusedRectEnabled, false));
+
+    attributes.recycle();
   }
 
   @Override
@@ -61,7 +86,7 @@ public class TextInputEditText extends AppCompatEditText {
     if (layout != null
         && layout.isProvidingHint()
         && super.getHint() == null
-        && Build.MANUFACTURER.equalsIgnoreCase("Meizu")) {
+        && ManufacturerUtils.isMeizuDevice()) {
       setHint("");
     }
   }
@@ -106,5 +131,96 @@ public class TextInputEditText extends AppCompatEditText {
   private CharSequence getHintFromLayout() {
     TextInputLayout layout = getTextInputLayout();
     return (layout != null) ? layout.getHint() : null;
+  }
+
+  /**
+   * Whether the edit text should use the TextInputLayout's focused rectangle.
+   */
+  public void setTextInputLayoutFocusedRectEnabled(boolean textInputLayoutFocusedRectEnabled) {
+    this.textInputLayoutFocusedRectEnabled = textInputLayoutFocusedRectEnabled;
+  }
+
+  /**
+   * Whether the edit text is using the TextInputLayout's focused rectangle.
+   */
+  public boolean isTextInputLayoutFocusedRectEnabled() {
+    return textInputLayoutFocusedRectEnabled;
+  }
+
+  @Override
+  public void getFocusedRect(@Nullable Rect r) {
+    super.getFocusedRect(r);
+    TextInputLayout textInputLayout = getTextInputLayout();
+    if (textInputLayout != null
+        && textInputLayoutFocusedRectEnabled
+        && r != null) {
+      textInputLayout.getFocusedRect(parentRect);
+      r.bottom = parentRect.bottom;
+    }
+  }
+
+  @Override
+  public boolean getGlobalVisibleRect(@Nullable Rect r, @Nullable Point globalOffset) {
+    boolean result = super.getGlobalVisibleRect(r, globalOffset);
+    TextInputLayout textInputLayout = getTextInputLayout();
+    if (textInputLayout != null
+        && textInputLayoutFocusedRectEnabled
+        && r != null) {
+      textInputLayout.getGlobalVisibleRect(parentRect, globalOffset);
+      r.bottom = parentRect.bottom;
+    }
+    return result;
+  }
+
+  @Override
+  public boolean requestRectangleOnScreen(@Nullable Rect rectangle) {
+    boolean result = super.requestRectangleOnScreen(rectangle);
+    TextInputLayout textInputLayout = getTextInputLayout();
+    if (textInputLayout != null && textInputLayoutFocusedRectEnabled) {
+      parentRect.set(
+          0,
+          textInputLayout.getHeight()
+              - getResources().getDimensionPixelOffset(R.dimen.mtrl_edittext_rectangle_top_offset),
+          textInputLayout.getWidth(),
+          textInputLayout.getHeight());
+      textInputLayout.requestRectangleOnScreen(parentRect, true);
+    }
+     return result;
+  }
+
+  @Override
+  public void onInitializeAccessibilityNodeInfo(@NonNull AccessibilityNodeInfo info) {
+    super.onInitializeAccessibilityNodeInfo(info);
+    TextInputLayout layout = getTextInputLayout();
+
+    // In APIs < 23, some things set in the parent TextInputLayout's AccessibilityDelegate get
+    // overwritten, so we set them here so that announcements are as expected.
+    if (VERSION.SDK_INT < 23 && layout != null) {
+      info.setText(getAccessibilityNodeInfoText(layout));
+    }
+  }
+
+  @NonNull
+  private String getAccessibilityNodeInfoText(@NonNull TextInputLayout layout) {
+    CharSequence inputText = getText();
+    CharSequence hintText = layout.getHint();
+    CharSequence helperText = layout.getHelperText();
+    CharSequence errorText = layout.getError();
+    boolean showingText = !TextUtils.isEmpty(inputText);
+    boolean hasHint = !TextUtils.isEmpty(hintText);
+    boolean hasHelperText = !TextUtils.isEmpty(helperText);
+    boolean showingError = !TextUtils.isEmpty(errorText);
+
+    String hint = hasHint ? hintText.toString() : "";
+    hint += ((showingError || hasHelperText) && !TextUtils.isEmpty(hint)) ? ", " : "";
+    hint += showingError ? errorText : (hasHelperText ? helperText : "");
+
+    if (showingText) {
+      return inputText + (!TextUtils.isEmpty(hint) ? (", " + hint) : "");
+    } else if (!TextUtils.isEmpty(hint)) {
+      return hint;
+    } else {
+      return "";
+    }
   }
 }
